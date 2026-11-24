@@ -1,0 +1,23 @@
+name: Check docs
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Reference holds only live operations and no internal markers
+        run: python3 scripts/check_reference.py
+      - run: npx --yes mint@latest validate
+      - run: npx --yes mint@latest broken-links

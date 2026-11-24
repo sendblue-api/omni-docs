@@ -1,0 +1,88 @@
+---
+title: Authentication
+description: One credential per request, sent as a bearer token or key-pair headers.
+---
+
+## Key pairs
+
+Send your credential ID and secret joined by a period in the `Authorization` header, or send the same pair in two `sb-api-*` headers:
+
+<CodeGroup>
+
+```bash Bearer token
+curl https://omni-api.sendblue.com/me \
+  -H "Authorization: Bearer SKxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx01.YOUR_KEY_SECRET"
+```
+
+```bash Two headers
+curl https://omni-api.sendblue.com/me \
+  -H "sb-api-key-id: $SENDBLUE_KEY_ID" \
+  -H "sb-api-secret-key: $SENDBLUE_KEY_SECRET"
+```
+
+</CodeGroup>
+
+The credential ID is either an API key ID (`SK…`) paired with the key's secret, or an account ID (`AC…`) paired with the account's token.
+
+<Note>
+  If a request includes an `Authorization` header, that header decides authentication alone. Any `sb-api-key-id` and `sb-api-secret-key` headers on the same request are ignored.
+</Note>
+
+## Existing Sendblue API keys
+
+The `sb-api-key-id` and `sb-api-secret-key` your integration already sends to the earlier Sendblue API work here too, either as two headers or as `Authorization: Bearer <key id>.<secret>`.
+
+The key acts as an API key of your company's root account: it can use the non-administrative operations and read the balance, and is refused on other `/admin` routes. If your company has no Omni account yet, the request answers `401 unauthenticated`, the same as a wrong secret.
+
+## Scoped keys
+
+An administrator session, the account token, or an API key with `keys:manage` can create keys with `POST /admin/keys`.
+
+```bash
+curl https://omni-api.sendblue.com/admin/keys \
+  -H "Authorization: Bearer $SENDBLUE_ADMIN_CREDENTIAL" \
+  -H "Idempotency-Key: 5f0c1c1e-key-webhook-operator" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Webhook operator",
+    "permissions": ["me:read", "webhooks:manage"],
+    "expires_at": "2027-01-01T00:00:00Z"
+  }'
+```
+
+<Warning>
+  The key's `secret` is returned **once**, in the `201` response to the first successful request. Store it immediately. An identical retry returns `200` without the secret.
+</Warning>
+
+Give a key a preset with `role`, an explicit list with `permissions`, or neither for a `standard` key:
+
+| Preset | Grants |
+| --- | --- |
+| `standard` *(default)* | Non-administrative operations and the balance read |
+| `read_only` | Read permissions of the `standard` preset |
+| `messaging` | Identity (`me:read`), reading messages, and sending messages |
+| `billing_read` | Identity (`me:read`) and reading the balance |
+
+Key rules:
+
+- An explicit `permissions` list is exact; an empty list grants nothing. Include `me:read` if the key should call `GET /me`.
+- When both `role` and `permissions` are given, `permissions` must be a subset of the preset.
+- A key can only grant permissions it holds itself, and an expiring key cannot issue one that outlives it.
+- To change a key's grants, create a new key and revoke the old one with `DELETE /admin/keys/{key_id}`. Revoked and expired keys stop authenticating immediately.
+- Keys with a custom or narrowed permission list work only on this JSON API. The Twilio-compatible API under `/t` accepts standard keys and account tokens.
+
+When a credential lacks permission for an endpoint, the API answers `403 permission_denied` with `error.details.required_permission` naming the missing grant. Every endpoint in the API reference states its required permission.
+
+## Sessions
+
+The Sendblue web app signs people in and sends their ID token as `Authorization: Bearer <ID token>`. A person acts in their company's root account with the role of their seat (`admin`, `manager`, or `member`), and may act in one of its active subaccounts by sending `Sendblue-Account: <account id>`. Server integrations should use API keys.
+
+## Account scoping
+
+Every request acts in the account its credential belongs to — no path, query, or body field selects the account. A key or token issued for a subaccount acts in that subaccount. Accessing a resource belonging to another account returns `404 not_found`, identical to a missing resource.
+
+The balance, as well as company contacts, tags, variables, and workflows, belong to the root account. Callers acting in a subaccount are refused on those routes.
+
+## Failed authentication
+
+A missing or invalid credential returns `401 unauthenticated`. Repeated failures for the same credential ID are throttled.

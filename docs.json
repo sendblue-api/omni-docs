@@ -1,0 +1,189 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "Sendblue Omni API",
+  "description": "Messaging and calling for US numbers: SMS, MMS, iMessage, voice, recordings and webhooks.",
+  "logo": {
+    "light": "/logo/sendblue-mark.svg",
+    "dark": "/logo/sendblue-mark.svg",
+    "href": "/"
+  },
+  "favicon": "/logo/sendblue-mark.svg",
+  "icons": {
+    "library": "lucide"
+  },
+  "colors": {
+    "primary": "#006CCB",
+    "light": "#5A98F3",
+    "dark": "#005CAE"
+  },
+  "background": {
+    "color": {
+      "dark": "#0D1014"
+    }
+  },
+  "fonts": {
+    "heading": {
+      "family": "Sendblue Aeonik",
+      "weight": 500,
+      "source": "/fonts/aeonik-medium.woff2",
+      "format": "woff2"
+    }
+  },
+  "styling": {
+    "eyebrows": "breadcrumbs",
+    "codeblocks": "system"
+  },
+  "search": {
+    "prompt": "Search guides and endpoints..."
+  },
+  "contextual": {
+    "options": [
+      "copy",
+      "view",
+      "download-spec",
+      "chatgpt",
+      "claude"
+    ]
+  },
+  "api": {
+    "playground": {
+      "display": "interactive"
+    },
+    "examples": {
+      "languages": [
+        "curl",
+        "javascript",
+        "python"
+      ],
+      "defaults": "required",
+      "prefill": true
+    }
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "GitHub",
+        "href": "https://github.com/sendblue-api/omni-docs"
+      }
+    ],
+    "primary": {
+      "type": "button",
+      "label": "Dashboard",
+      "href": "https://dashboard.sendblue.com"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/sendblue-api/omni-docs",
+      "website": "https://www.sendblue.com"
+    },
+    "links": [
+      {
+        "header": "Guides",
+        "items": [
+          {
+            "label": "Overview",
+            "href": "/"
+          },
+          {
+            "label": "Authentication",
+            "href": "/authentication"
+          },
+          {
+            "label": "Webhooks",
+            "href": "/webhooks"
+          },
+          {
+            "label": "Errors",
+            "href": "/errors"
+          }
+        ]
+      },
+      {
+        "header": "Quickstarts",
+        "items": [
+          {
+            "label": "Send an SMS",
+            "href": "/quickstart/send-sms"
+          },
+          {
+            "label": "Receive an SMS",
+            "href": "/quickstart/receive-sms"
+          },
+          {
+            "label": "Place and receive a call",
+            "href": "/quickstart/calls"
+          },
+          {
+            "label": "Upload and send media",
+            "href": "/quickstart/media"
+          }
+        ]
+      },
+      {
+        "header": "Sendblue",
+        "items": [
+          {
+            "label": "Website",
+            "href": "https://www.sendblue.com"
+          },
+          {
+            "label": "Dashboard",
+            "href": "https://dashboard.sendblue.com"
+          },
+          {
+            "label": "GitHub",
+            "href": "https://github.com/sendblue-api/omni-docs"
+          }
+        ]
+      }
+    ]
+  },
+  "seo": {
+    "metatags": {
+      "canonical": "https://omni-docs.sendblue.com"
+    }
+  },
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Guides",
+        "groups": [
+          {
+            "group": "Get started",
+            "pages": [
+              "index",
+              "authentication"
+            ]
+          },
+          {
+            "group": "Core concepts",
+            "pages": [
+              "idempotency",
+              "errors",
+              "pagination",
+              "webhooks"
+            ]
+          },
+          {
+            "group": "Quickstarts",
+            "pages": [
+              "quickstart/send-sms",
+              "quickstart/receive-sms",
+              "quickstart/calls",
+              "quickstart/record-a-call",
+              "quickstart/media",
+              "quickstart/warm-handoff",
+              "quickstart/imessage-numbers"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API reference",
+        "openapi": "api-reference/openapi.yaml"
+      }
+    ]
+  }
+}

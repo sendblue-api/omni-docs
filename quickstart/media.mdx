@@ -1,0 +1,84 @@
+---
+title: Upload and send media
+description: Upload an attachment to Omni, then send it by ID in an MMS or iMessage.
+---
+
+<Steps>
+  <Step title="Upload the file">
+    Send a single multipart form field named `file` with the part's MIME type explicitly declared:
+
+    ```bash
+    curl https://omni-api.sendblue.com/media \
+      -H "Authorization: Bearer $SENDBLUE_KEY_ID.$SENDBLUE_KEY_SECRET" \
+      -H "Idempotency-Key: 9a2d4c1e-upload-0001" \
+      -F "file=@photo.png;type=image/png"
+    ```
+
+    ```json
+    {
+      "id": "99456418-e03a-484c-b42e-94b998ead0a3",
+      "content_type": "image/png",
+      "size_bytes": 2391,
+      "message_id": null,
+      "url": "https://omni-api.sendblue.com/v1/UploadedMediaContent/86bd74f1-355a-44c6-ab01-5f42eb480331/file",
+      "created_at": "2026-11-23T12:00:00.000000Z",
+      "expires_at": "2026-11-23T16:00:00.000000Z"
+    }
+    ```
+
+    | Limit | Value |
+    | --- | --- |
+    | **Accepted types** | JPEG, PNG, GIF, MP4, MP3, and PDF (the declared MIME type must match the file signature) |
+    | **File size** | 1 byte to 4 MiB per file |
+    | **Retention** | 4 hours, after which the upload expires automatically |
+    | **Account quota** | 256 live uploads and 64 MiB total across the account |
+
+    <Warning>
+      `url` is a bearer download link that anyone holding it can read until the upload expires or is deleted. Treat it as a secret.
+    </Warning>
+  </Step>
+
+  <Step title="Attach and send">
+    Pass the upload's `id` in `media_ids` when calling `POST /messages`:
+
+    ```bash
+    curl https://omni-api.sendblue.com/messages \
+      -H "Authorization: Bearer $SENDBLUE_KEY_ID.$SENDBLUE_KEY_SECRET" \
+      -H "Idempotency-Key: 9a2d4c1e-send-0001" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "to": "+14155550101",
+        "from": "+14155550100",
+        "body": "Here is the photo",
+        "media_ids": ["99456418-e03a-484c-b42e-94b998ead0a3"]
+      }'
+    ```
+
+    - Carrier MMS accepts up to **10** uploads per message, sent in delivery order. An iMessage line accepts **1**.
+    - `body` is optional when attachments are present.
+    - Keep the upload live until the message has been sent — deleting it or letting it expire revokes access immediately, even for queued messages.
+    - Pass either `media_ids` or `media_urls`, never both (`media_urls` accepts up to 10 public `https` URLs you host yourself).
+  </Step>
+</Steps>
+
+## Read or delete an upload
+
+```bash
+curl https://omni-api.sendblue.com/media/99456418-e03a-484c-b42e-94b998ead0a3 \
+  -H "Authorization: Bearer $SENDBLUE_KEY_ID.$SENDBLUE_KEY_SECRET"
+
+curl -X DELETE https://omni-api.sendblue.com/media/99456418-e03a-484c-b42e-94b998ead0a3 \
+  -H "Authorization: Bearer $SENDBLUE_KEY_ID.$SENDBLUE_KEY_SECRET"
+```
+
+Expired, deleted, or unknown upload IDs return `404 not_found`.
+
+## Common refusals
+
+| Response | Cause |
+| --- | --- |
+| `400 invalid_request` | Malformed multipart form. |
+| `409 idempotency_conflict` | That `Idempotency-Key` was already used for a different file. |
+| `413 payload_too_large` | File exceeds 4 MiB. |
+| `415 unsupported_media_type` | Unsupported MIME type, or file bytes do not match the declared type. |
+| `429 rate_limited` | Account upload quota (256 files or 64 MiB) is full. |

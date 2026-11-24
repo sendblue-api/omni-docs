@@ -1,0 +1,82 @@
+---
+title: Record a call
+description: Record outbound or inbound calls, list recordings, and download audio in WAV or MP3.
+---
+
+<Note>
+  Recorded time is billed per recorded second at your account's recording rate. Recording rates are not listed in `GET /prices` yet — contact Sendblue for your rate, or inspect the settled `price` on each completed recording and in `GET /admin/billing/transactions`.
+
+  Notifying call participants that a call is being recorded, where required by law, is your responsibility.
+</Note>
+
+## Start a recording
+
+<Tabs>
+  <Tab title="On an outbound call">
+    Pass `"record": true` to `POST /calls` to record from answer to hangup:
+
+    ```bash
+    curl https://omni-api.sendblue.com/calls \
+      -H "Authorization: Bearer $SENDBLUE_KEY_ID.$SENDBLUE_KEY_SECRET" \
+      -H "Idempotency-Key: 3d0a5b1c-call-0002" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "to": "+14155550101",
+        "from": "+14155550100",
+        "twiml": "<Response><Say>This call is recorded.</Say><Pause length=\"30\"/></Response>",
+        "record": true,
+        "recording_channels": "dual"
+      }'
+    ```
+
+    - `recording_channels`: `mono` or `dual`.
+    - `recording_track`: `inbound`, `outbound`, or `both`.
+    - `recording_status_callback`: receives `in_progress`, `completed`, and `absent` updates in Twilio's callback format (`X-Twilio-Signature`).
+  </Tab>
+
+  <Tab title="With TwiML <Record>">
+    To record an incoming call — or only part of a call — use the `<Record>` verb in your TwiML document:
+
+    ```xml
+    <?xml version="1.0" encoding="UTF-8"?>
+    <Response>
+      <Say>Please leave a message after the tone.</Say>
+      <Record maxLength="60"/>
+    </Response>
+    ```
+  </Tab>
+</Tabs>
+
+## Retrieve and manage recordings
+
+<Steps>
+  <Step title="List a call's recordings">
+    ```bash
+    curl https://omni-api.sendblue.com/calls/CA0123456789abcdef0123456789abcdef/recordings \
+      -H "Authorization: Bearer $SENDBLUE_KEY_ID.$SENDBLUE_KEY_SECRET"
+    ```
+
+    Each recording includes `id`, `status`, `channels` (`1` or `2`), `duration_seconds` (whole seconds), and `price`. `status` is one of `in_progress`, `paused`, `processing`, `completed`, or `absent` (a recording with no audio or that failed).
+  </Step>
+
+  <Step title="Download the audio">
+    Wait until `status` is `completed`, then fetch the audio stream:
+
+    ```bash
+    curl "https://omni-api.sendblue.com/recordings/RE0123456789abcdef0123456789abcdef/audio?format=mp3" \
+      -H "Authorization: Bearer $SENDBLUE_KEY_ID.$SENDBLUE_KEY_SECRET" \
+      -o recording.mp3
+    ```
+
+    `format` accepts `wav` (default) or `mp3`. Audio is served only to your account's credentials — no public or unauthenticated link exists.
+  </Step>
+
+  <Step title="Delete a recording">
+    ```bash
+    curl -X DELETE https://omni-api.sendblue.com/recordings/RE0123456789abcdef0123456789abcdef \
+      -H "Authorization: Bearer $SENDBLUE_KEY_ID.$SENDBLUE_KEY_SECRET"
+    ```
+
+    A `204` response confirms the recording and its audio have been deleted.
+  </Step>
+</Steps>

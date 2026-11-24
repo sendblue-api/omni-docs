@@ -1,0 +1,49 @@
+---
+title: Idempotency
+description: Repeat a write safely with the Idempotency-Key header.
+---
+
+Writes that cost money, create durable resources, or reach a carrier require an `Idempotency-Key` header: a unique string of 1 to 128 visible ASCII characters for the write you intend.
+
+```bash
+curl https://omni-api.sendblue.com/messages \
+  -H "Authorization: Bearer $SENDBLUE_KEY_ID.$SENDBLUE_KEY_SECRET" \
+  -H "Idempotency-Key: 7c1e0e0a-2f3b-4c55-9a43-0a4f5f0f2b11" \
+  -H "Content-Type: application/json" \
+  -d '{"to":"+14155550101","from":"+14155550100","body":"Your code is 482913"}'
+```
+
+If a network timeout or `503` leaves you unsure whether the request succeeded, send the exact same request again with the same `Idempotency-Key`:
+
+- **Same key, same request** — returns the original result, and the work happens once.
+- **Same key, different request** — returns `409 idempotency_conflict`.
+
+<Tip>
+  Generate a fresh UUIDv4 for each new logical write, persist it alongside your local intent before calling the API, and reuse that exact key on retries.
+</Tip>
+
+## Operations that require `Idempotency-Key`
+
+The API reference marks `Idempotency-Key` on every endpoint that accepts it. All 18 live operations that require it:
+
+| Area | Operations |
+| --- | --- |
+| **Messaging & media** | `POST /messages`, `POST /media` |
+| **Voice** | `POST /calls` |
+| **Numbers & 10DLC** | `POST /numbers`, `POST /numbers/orders`, `POST /brands`, `PATCH /brands/{brand_id}`, `POST /campaigns` |
+| **Company resources** | `POST /contacts`, `POST /tags`, `POST /variables` |
+| **Accounts & billing** | `POST /accounts`, `POST /admin/subaccounts`, `POST /admin/keys`, `POST /admin/billing/top_ups` |
+| **Webhooks** | `POST /admin/webhooks`, `POST /admin/webhooks/{webhook_id}/rotate_secret`, `POST /admin/webhooks/{webhook_id}/deliveries/{delivery_id}/replay` |
+
+## Resource-specific behaviour
+
+| Resource | Replay behaviour |
+| --- | --- |
+| **Messages & calls** | Repeating a key produces one message or one call, even across this API and the Twilio-compatible API under `/t`. |
+| **Brands & campaigns** | Replaying returns the original registration and charges once. A different payload under the same key answers `409 idempotency_conflict`. |
+| **Number purchases** | Purchases are keyed by account and phone number. Repeating a purchase for the same number — under any key — joins the first order and never places a second. |
+| **Top-ups** | Repeating a key with the same amount returns the original checkout. |
+| **API keys** | First success returns `201` with `secret`. An identical retry returns `200` without `secret`. After revocation, a retry returns `404`. |
+| **Webhook endpoints** | First success returns `201` with the signing `secret`. An identical retry returns `200` without `secret`. |
+| **Media uploads** | Repeating the same key with the same MIME type and bytes returns the same upload while live. A different file returns `409`, and an expired or deleted upload returns `404`. |
+| **Contacts, tags & variables** | Repeating the same key and body returns the original created record, even if it was later edited or deleted. |

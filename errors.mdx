@@ -1,0 +1,75 @@
+---
+title: Errors
+description: One consistent JSON error shape for every non-2xx response.
+---
+
+Every error response uses the same envelope:
+
+```json
+{
+  "error": {
+    "code": "unprocessable",
+    "message": "The sender cannot send this message.",
+    "details": {
+      "reason": "sender_unavailable"
+    }
+  }
+}
+```
+
+- **`code`** is stable. Branch your error handling on it.
+- **`message`** is human-readable and may change. It never echoes values you sent.
+- **`details`** is optional, machine-readable context.
+
+## Error codes
+
+| Code | HTTP | Meaning |
+| --- | --- | --- |
+| `invalid_request` | `400` | Malformed JSON, unknown or mistyped field, or invalid parameter/header. |
+| `unauthenticated` | `401` | Missing credential, or one that failed verification. |
+| `insufficient_funds` | `402` | Balance cannot cover the price, or debt is outstanding. |
+| `forbidden` | `403` | The account, resource, or deployment refuses this operation. |
+| `permission_denied` | `403` | Credential lacks the permission named in `details.required_permission`. |
+| `not_found` | `404` | No such route, or no such resource in this account. |
+| `method_not_allowed` | `405` | The route exists, but does not accept this HTTP method. |
+| `conflict` | `409` | The resource is not in a state that allows the change. |
+| `idempotency_conflict` | `409` | The `Idempotency-Key` was already used for a different request. |
+| `payload_too_large` | `413` | Request body exceeds the route limit. |
+| `unsupported_media_type` | `415` | Request body is not of a media type the route accepts. |
+| `unprocessable` | `422` | Well-formed request that cannot be carried out; `details.reason` explains why. |
+| `unsupported` | `422` | The field or value is defined in the contract but not available yet. |
+| `rate_limited` | `429` | Too many requests. Wait `Retry-After` seconds. |
+| `internal` | `500` | Unexpected server failure. |
+| `unavailable` | `503` | A dependency is unavailable or the request timed out. Safe to retry. |
+| `upstream_unavailable` | `503` | A backing resource service is unavailable. Wait `Retry-After` seconds. |
+| `write_outcome_unknown` | `503` | The write may have committed. Follow `details.recovery` (no `Retry-After`). |
+
+## Details fields
+
+| Field | Meaning |
+| --- | --- |
+| `field` | The request member, query parameter, or header at fault. |
+| `reason` | Narrows `unprocessable` and some `forbidden`/`conflict` responses, such as `sender_unavailable`, `recipient_opted_out`, `price_ceiling`, `number_unavailable`, `campaign_not_approved`, or `registered_number`. |
+| `required_permission` | The missing grant on a `403 permission_denied` response. |
+| `recovery` | Required next step after `503 write_outcome_unknown`. |
+
+## Handling `write_outcome_unknown`
+
+<Warning>
+  `503 write_outcome_unknown` means the write may already have committed. The API never retries it automatically. Follow `details.recovery` before issuing another write.
+</Warning>
+
+| `details.recovery` | What to do |
+| --- | --- |
+| `retry_same_idempotency_key` | Repeat the create request with the original `Idempotency-Key` and identical body. |
+| `read_resource` | Read the resource and compare it with your intended state. For a deletion, `404` confirms it is gone. |
+| `reconcile_tag_membership` | Read the tag list and affected contacts, and settle any contacts that did not move before making another change. |
+
+## Retrying
+
+- **`429` or `503` with `Retry-After`:** wait at least that many seconds, then retry. Keep the same `Idempotency-Key` on writes.
+- **`503 unavailable` without `Retry-After`:** retry with exponential backoff.
+- **`402 insufficient_funds`:** add funds to your balance, then repeat.
+- **Other `4xx` responses:** fix the request before retrying; sending the same request unchanged will fail again.
+
+Every response carries a `Request-Id` header. Include it when contacting Sendblue support.

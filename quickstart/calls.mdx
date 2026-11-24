@@ -1,0 +1,94 @@
+---
+title: Place and receive a call
+description: Run outbound and inbound US phone calls with inline or URL-hosted TwiML documents.
+---
+
+Calls are US phone calls. A number you purchase can place and receive calls as soon as the purchase completes — voice requires no 10DLC campaign registration. Check `capabilities.calls` on `GET /numbers/{phone_number}`.
+
+Every call executes a TwiML document. Supported verbs include `<Say>`, `<Play>`, `<Pause>`, `<Gather>` (keypad input), `<Dial>` (to a phone number), `<Record>`, `<Redirect>`, `<Reject>`, and `<Hangup>`.
+
+## Outbound calls
+
+<Steps>
+  <Step title="Place a call">
+    Provide instructions either inline in `twiml` or via a `url` fetched when the call is answered (exactly one is required):
+
+    ```bash
+    curl https://omni-api.sendblue.com/calls \
+      -H "Authorization: Bearer $SENDBLUE_KEY_ID.$SENDBLUE_KEY_SECRET" \
+      -H "Idempotency-Key: 3d0a5b1c-call-0001" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "to": "+14155550101",
+        "from": "+14155550100",
+        "twiml": "<Response><Say>Hello from Sendblue.</Say></Response>"
+      }'
+    ```
+
+    A `201` response returns the call with its `id` and initial `status`.
+
+    - `from` must be a number owned by your account.
+    - `timeout_seconds` sets ring duration (`5`–`120`, default `60`).
+    - `time_limit_seconds` sets maximum answered duration (`30`–`14400`, default `14400`).
+    - The maximum possible call cost is held from your balance at acceptance, and settled for actual usage when the call ends.
+  </Step>
+
+  <Step title="Follow the call">
+    Subscribe a [webhook](/webhooks) to `call.updated` and `call.completed`, or poll the call:
+
+    ```bash
+    curl https://omni-api.sendblue.com/calls/CA0123456789abcdef0123456789abcdef \
+      -H "Authorization: Bearer $SENDBLUE_KEY_ID.$SENDBLUE_KEY_SECRET"
+    ```
+
+    `status` progresses through `queued` → `ringing` → `in_progress` → `completed`, or ends as `busy`, `no_answer`, `failed`, or `canceled`. Finished calls populate `duration_seconds` and, once settled, `price`.
+  </Step>
+
+  <Step title="Redirect or end a call in progress">
+    Send a `PATCH` request with exactly one change per request:
+
+    ```bash
+    curl -X PATCH https://omni-api.sendblue.com/calls/CA0123456789abcdef0123456789abcdef \
+      -H "Authorization: Bearer $SENDBLUE_KEY_ID.$SENDBLUE_KEY_SECRET" \
+      -H "Content-Type: application/json" \
+      -d '{"status":"completed"}'
+    ```
+
+    - `{"status": "canceled"}` cancels a call that has not been answered yet.
+    - `{"status": "completed"}` hangs up a call in any state.
+    - `{"twiml": "..."}` or `{"url": "https://..."}` replaces the instructions of an active call.
+  </Step>
+</Steps>
+
+## Receive a call
+
+Configure `voice_url` on a number you own. Whenever someone calls that number, Omni requests your URL and executes the TwiML document it returns:
+
+```bash
+curl -X PATCH https://omni-api.sendblue.com/numbers/%2B14155550100 \
+  -H "Authorization: Bearer $SENDBLUE_KEY_ID.$SENDBLUE_KEY_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "voice_url": "https://example.com/voice",
+    "voice_method": "POST",
+    "status_callback": "https://example.com/voice/status"
+  }'
+```
+
+Respond from your `voice_url` with TwiML:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say>Thanks for calling. Connecting you now.</Say>
+  <Dial>+14155550102</Dial>
+</Response>
+```
+
+- Set `voice_fallback_url` to handle failures reaching `voice_url`.
+- Set `status_callback` on the number to receive status updates for incoming calls.
+- Incoming calls appear in `GET /calls` with `direction: "inbound"`. Any leg spawned by `<Dial>` has `direction: "outbound_dial"` and links back to its parent via `parent_call_id`.
+
+<Info title="TwiML & callback request format">
+  Requests sent to your `voice_url`, `voice_fallback_url`, `url`, and `status_callback` endpoints use Twilio's form-encoded parameters (`CallSid`, `From`, `To`, `CallStatus`) and carry an `X-Twilio-Signature` header — not the signed JSON described in [Webhooks](/webhooks).
+</Info>

@@ -1,0 +1,79 @@
+---
+title: Sendblue Omni API
+description: Send and receive messages, place and receive calls, and manage US numbers over one JSON API.
+---
+
+The Omni API lives at `https://omni-api.sendblue.com`. Routes mount at the root of the host with no version prefix, and requests and responses use JSON with `snake_case` field names.
+
+Check your credential with `GET /me`:
+
+```bash
+curl https://omni-api.sendblue.com/me \
+  -H "Authorization: Bearer $SENDBLUE_KEY_ID.$SENDBLUE_KEY_SECRET"
+```
+
+```json
+{
+  "id": "ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx01",
+  "name": "Acme Corp",
+  "status": "active",
+  "type": "root",
+  "parent_id": null,
+  "credential": {
+    "type": "api_key",
+    "id": "SKxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx01"
+  },
+  "permissions": ["me:read", "messages:read", "messages:send"],
+  "capabilities": ["messages", "prices"],
+  "created_at": "2026-11-23T18:04:05.123456Z"
+}
+```
+
+`GET /me` returns the account the credential acts in, its `permissions`, and the resource groups it can use (`capabilities`).
+
+## Start here
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="key-round" href="/authentication">
+    Key pairs, existing Sendblue API keys, and scoped keys.
+  </Card>
+  <Card title="Send an SMS" icon="message-square" href="/quickstart/send-sms">
+    Check a registered number, send a message, and track delivery.
+  </Card>
+  <Card title="Receive an SMS" icon="inbox" href="/quickstart/receive-sms">
+    Receive signed `message.received` webhooks at your HTTPS URL.
+  </Card>
+  <Card title="Place and receive a call" icon="phone" href="/quickstart/calls">
+    Run outbound and inbound US calls with TwiML documents.
+  </Card>
+  <Card title="Record a call" icon="mic" href="/quickstart/record-a-call">
+    Record calls, list recordings, and download audio.
+  </Card>
+  <Card title="Upload and send media" icon="image" href="/quickstart/media">
+    Upload a file and attach it to an MMS or iMessage.
+  </Card>
+  <Card title="Warm handoff" icon="phone-forwarded" href="/quickstart/warm-handoff">
+    Hold a caller, introduce a second agent, and leave them connected.
+  </Card>
+  <Card title="iMessage numbers" icon="smartphone" href="/quickstart/imessage-numbers">
+    Request iMessage lines and follow fulfillment for your account.
+  </Card>
+</CardGroup>
+
+## Conventions
+
+| Convention | Rule |
+| --- | --- |
+| **Bodies** | JSON objects up to 64 KiB. An unknown or mistyped member, query parameter, or header is refused with `400 invalid_request`, and `error.details.field` names it. |
+| **Time** | RFC 3339 in UTC, for example `2026-11-23T18:04:05.123456Z`. |
+| **Money** | Integer micro-USD beside a currency: `{"amount_micro_usd": 7900, "currency": "USD"}`. A catalog price shown before charging also includes a decimal string in `amount`. |
+| **Prices** | `GET /prices` lists your account's current rates for brands, campaigns, numbers, messages, outbound calls, and conference participants. A catalog product with no price for your account is absent and cannot be bought. Voice add-ons such as call recording and answering-machine detection are priced on your account separately and are not yet listed in `GET /prices`. |
+| **IDs** | Opaque strings. Do not parse them. |
+| **Phone numbers** | E.164. In a URL path, percent-encode the plus sign: `/numbers/%2B14155550100`. |
+| **Request ID** | Every response includes a `Request-Id` header. Quote it when you ask Sendblue for help. |
+| **Async operations** | Work that finishes later at the carrier returns an `operation_id`. Poll `GET /operations/{operation_id}` for `pending`, `succeeded`, or `failed`. |
+| **Version header** | `Sendblue-Version: YYYY-MM-DD` is reserved. Valid dates are accepted and ignored today; any other format is refused. |
+
+<Info title="Two APIs on one host">
+  The JSON API documented here is the surface to build on. The same host also serves a frozen Twilio-compatible API under `/t` that keeps existing integrations working without new features. A message, number, call, or recording is the same resource on both with the same ID. The [warm handoff](/quickstart/warm-handoff) quickstart uses the conference routes under `/t` because this API has no native conference operation yet. Calls and messages are for US numbers.
+</Info>

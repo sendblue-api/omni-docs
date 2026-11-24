@@ -1,0 +1,102 @@
+---
+title: Send an SMS
+description: Verify a number can send, send a message, and follow its delivery.
+---
+
+## Prerequisites
+
+- A credential with `messages:send` (see [Authentication](/authentication)).
+- A US number on your account assigned to an approved 10DLC campaign with carrier confirmation. See [Register a number for SMS](#register-a-number-for-sms) if your number is not registered yet.
+- Available balance. The price of a message is held when it is accepted.
+
+## Send a message
+
+<Steps>
+  <Step title="Check that the number can send">
+    Percent-encode the `+` in the phone number (`%2B`) and inspect its campaign state:
+
+    ```bash
+    curl https://omni-api.sendblue.com/numbers/%2B14155550100/campaign \
+      -H "Authorization: Bearer $SENDBLUE_KEY_ID.$SENDBLUE_KEY_SECRET"
+    ```
+
+    ```json
+    {
+      "phone_number": "+14155550100",
+      "campaign_id": "MG0123456789abcdef0123456789abcdef",
+      "sms": { "enabled": true, "blocked_reason": null },
+      "assigned_at": "2026-11-23T18:04:05.123456Z",
+      "activated_at": "2026-11-23T18:10:41.000000Z"
+    }
+    ```
+
+    When `sms.enabled` is `false`, `sms.blocked_reason` explains why: `no_campaign`, `campaign_not_approved`, `carrier_assignment_pending`, `number_not_active`, or `channel_not_supported`.
+  </Step>
+
+  <Step title="Send the SMS">
+    Include a unique `Idempotency-Key` header so network retries never double-send:
+
+    ```bash
+    curl https://omni-api.sendblue.com/messages \
+      -H "Authorization: Bearer $SENDBLUE_KEY_ID.$SENDBLUE_KEY_SECRET" \
+      -H "Idempotency-Key: 7c1e0e0a-2f3b-4c55-9a43-0a4f5f0f2b11" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "to": "+14155550101",
+        "from": "+14155550100",
+        "body": "Your code is 482913"
+      }'
+    ```
+
+    A `201` response returns the message with its `id` and initial `status` (such as `queued`).
+
+    Useful options on `POST /messages`:
+    - Specify `from`, or pass `campaign_id` to let the campaign pick one of its numbers.
+    - `body` can be up to 1,600 characters.
+    - `max_price_micro_usd` refuses the message if it would cost more than your ceiling.
+    - `send_at` schedules delivery between 15 minutes and 35 days ahead (requires `campaign_id`).
+    - Call `GET /prices?parts=3` to preview the estimated charge for a 3-part message before sending.
+  </Step>
+
+  <Step title="Follow delivery">
+    Subscribe a [webhook](/webhooks) to `message.sent`, `message.delivered`, and `message.failed`, or fetch the message directly:
+
+    ```bash
+    curl https://omni-api.sendblue.com/messages/SM0123456789abcdef0123456789abcdef \
+      -H "Authorization: Bearer $SENDBLUE_KEY_ID.$SENDBLUE_KEY_SECRET"
+    ```
+
+    `status` moves through `queued` → `sending` → `sent` → `delivered`, or ends as `undelivered` or `failed` with an `error_code`. `segments` and `price` populate once known.
+  </Step>
+</Steps>
+
+## Common refusals
+
+| Response | Cause |
+| --- | --- |
+| `422 unprocessable` (`sender_unavailable`) | The `from` number cannot send SMS right now. Check step 1. |
+| `422 unprocessable` (`recipient_opted_out`) | The recipient has opted out of messages from this sender. |
+| `422 unprocessable` (`price_ceiling`) | The message would cost more than `max_price_micro_usd`. |
+| `402 insufficient_funds` | Balance cannot cover the price. |
+| `409 idempotency_conflict` | That `Idempotency-Key` was already used for a different request. |
+
+## Register a number for SMS
+
+US carriers require 10DLC registration before a local number can send SMS. Every step runs through this API:
+
+| Step | Request | Typical timing |
+| --- | --- | --- |
+| 1 | `GET /prices` to review fees for each step | Immediate |
+| 2 | `POST /brands` with your business details | Carrier review: minutes to a few business days |
+| 3 | Poll `GET /brands/{brand_id}` until `status` is `verified` | — |
+| 4 | `POST /campaigns` for the verified brand | Registry & carrier review: typically 3–7 business days |
+| 5 | Poll `GET /campaigns/{campaign_id}` until `status` is `approved` | — |
+| 6 | `GET /numbers/available`, then `POST /numbers` | Seconds |
+| 7 | `PUT /numbers/{phone_number}/campaign` with `{"campaign_id": "MG…"}` | Carrier assignment: usually minutes |
+| 8 | Poll `GET /numbers/{phone_number}/campaign` until `sms.enabled` is `true` | — |
+
+<Note>
+  Carrier review times are estimates, not guarantees. You can purchase numbers before or after campaign approval — voice works immediately without registration. Subscribe to `brand.updated`, `campaign.updated`, and `number.updated` webhooks instead of polling.
+
+  A rejected campaign fee is not refunded. Submitting a corrected campaign requires a new `POST /campaigns` request with a new `Idempotency-Key` and fee.
+</Note>

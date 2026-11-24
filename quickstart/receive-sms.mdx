@@ -1,0 +1,111 @@
+---
+title: Receive an SMS
+description: Get a signed webhook event at your HTTPS URL whenever someone texts your number.
+---
+
+<Note>
+  A local US number receives SMS only after its 10DLC campaign is approved and carrier assignment completes. Check `GET /numbers/{phone_number}/campaign` — the number is ready when `sms.enabled` is `true`. See [Register a number for SMS](/quickstart/send-sms#register-a-number-for-sms).
+</Note>
+
+<Steps>
+  <Step title="Register a webhook endpoint">
+    Use an administrator session, the account token, or an API key with `webhooks:manage`:
+
+    ```bash
+    curl https://omni-api.sendblue.com/admin/webhooks \
+      -H "Authorization: Bearer $SENDBLUE_ADMIN_CREDENTIAL" \
+      -H "Idempotency-Key: 0b9f7f0e-hooks-inbound" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "url": "https://hooks.example.com/sendblue",
+        "events": ["message.received"]
+      }'
+    ```
+
+    Store the signing `secret` from the `201` response immediately — it is shown once.
+  </Step>
+
+  <Step title="Receive and verify the event">
+    When an inbound message arrives, Omni sends a signed `POST` request to your URL:
+
+    ```json
+    {
+      "id": "EV0123456789abcdef0123456789abcdef",
+      "type": "message.received",
+      "created_at": "2026-11-23T18:04:07Z",
+      "data": {
+        "id": "SM0123456789abcdef0123456789abcdef",
+        "direction": "inbound",
+        "status": "received",
+        "to": "+14155550100",
+        "from": "+14155550101",
+        "campaign_id": null,
+        "body": "Yes, please call me",
+        "media_urls": [],
+        "segments": 1,
+        "price": null,
+        "error_code": null,
+        "status_callback": null,
+        "created_at": "2026-11-23T18:04:07Z",
+        "updated_at": "2026-11-23T18:04:07Z",
+        "sent_at": null
+      }
+    }
+    ```
+
+    [Verify the signature](/webhooks#verify-the-signature) on the raw request body before trusting the payload, then return any `2xx` status:
+
+    ```python
+    from flask import Flask, request, abort
+
+    from verify import verified_event  # from the Webhooks guide
+
+    app = Flask(__name__)
+    SECRET = "the endpoint's signing secret"
+
+    @app.post("/sendblue")
+    def sendblue():
+        try:
+            event = verified_event(
+                SECRET,
+                request.headers.getlist("X-Sendblue-Signature"),
+                request.get_data(),
+            )
+        except ValueError:
+            abort(400)
+        if event["type"] == "message.received":
+            message = event["data"]
+            print(message["from"], message["body"])
+        return "", 204
+    ```
+
+    The same event can be delivered more than once. Deduplicate on the event `id`.
+  </Step>
+</Steps>
+
+## Pictures and other MMS attachments
+
+Inbound MMS messages list their attachments in `media_urls`. These URLs point to authenticated Media resources on this API (never the carrier's raw URLs) and are served only to the account that owns the message.
+
+Fetch them with **HTTP Basic authentication** using your account ID and account token (or a standard `SK…` API key and secret), and follow the `302` redirect:
+
+```bash
+curl -L -u "$SENDBLUE_ACCOUNT_ID:$SENDBLUE_ACCOUNT_TOKEN" \
+  "https://omni-api.sendblue.com/2010-04-01/Accounts/$SENDBLUE_ACCOUNT_ID/Messages/SM0123456789abcdef0123456789abcdef/Media/ME0123456789abcdef0123456789abcdef" \
+  -o attachment.png
+```
+
+<Note>
+  Inbound Media resource URLs require HTTP Basic auth with your account token or a `standard` API key. `Authorization: Bearer` tokens and keys with custom/narrowed permissions are not accepted on these URLs.
+</Note>
+
+## Read inbound messages without a webhook
+
+You can also list inbound messages directly with `GET /messages`:
+
+```bash
+curl "https://omni-api.sendblue.com/messages?direction=inbound&to=%2B14155550100" \
+  -H "Authorization: Bearer $SENDBLUE_KEY_ID.$SENDBLUE_KEY_SECRET"
+```
+
+Results are returned newest first and follow standard [cursor pagination](/pagination).

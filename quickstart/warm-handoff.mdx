@@ -1,0 +1,105 @@
+---
+title: Warm handoff
+description: Hold a caller, introduce a second agent privately, then leave the caller and second agent connected.
+---
+
+A warm handoff transfers a live caller from one agent to another without dropping them: the first agent puts the caller on hold, briefs the next agent privately, then disconnects while the caller and next agent keep talking.
+
+<Info title="Uses conference routes under /t">
+  The JSON API does not have native conference operations yet. This recipe uses the Twilio-compatible conference routes under `/t` on the same host and account. Every call leg created there is the exact same resource — inspect its status and settled price anytime with `GET /calls/{call_id}`.
+</Info>
+
+In this pattern, all three parties are dialed into one conference room: the caller (A), the first agent (B), and the next agent (C).
+
+## Before you start
+
+- **Check conference pricing in `GET /prices`:** look for `call.conference.participant`. Each participant is billed for their time in the conference on top of each call leg's price. If `call.conference.participant` is absent from `GET /prices`, contact Sendblue to have a rate set — otherwise participant creation returns HTTP `403` (code `20010`), and nothing is dialed or charged.
+- **Funds for three calls:** a balance hold is placed for each call leg when dialed and settled when that leg ends.
+- **Credentials for `/t`:** these routes use HTTP Basic authentication with your account ID (`AC…`) as the username and account token as the password. Requests are form-encoded and paths end in `.json`.
+
+```bash
+BASE="https://omni-api.sendblue.com/t/2010-04-01/Accounts/$ACCOUNT_ID"
+AUTH="$ACCOUNT_ID:$ACCOUNT_TOKEN"
+ROOM="support-4821"   # any name unique to this conversation
+```
+
+## Run the handoff
+
+<Steps>
+  <Step title="Bring the caller and first agent together">
+    Add the caller as the first participant (this creates the conference):
+
+    ```bash
+    curl "$BASE/Conferences/$ROOM/Participants.json" -u "$AUTH" \
+      --data-urlencode "From=+14155550100" \
+      --data-urlencode "To=+14155550101" \
+      --data-urlencode "Label=caller" \
+      --data-urlencode "EarlyMedia=false" \
+      --data-urlencode "StartConferenceOnEnter=true" \
+      --data-urlencode "EndConferenceOnExit=false" \
+      --data-urlencode "StatusCallback=https://example.com/voice/events" \
+      --data-urlencode "StatusCallbackEvent=initiated" \
+      --data-urlencode "StatusCallbackEvent=ringing" \
+      --data-urlencode "StatusCallbackEvent=answered" \
+      --data-urlencode "StatusCallbackEvent=completed" \
+      --data-urlencode "ConferenceStatusCallback=https://example.com/voice/events" \
+      --data-urlencode "ConferenceStatusCallbackEvent=start" \
+      --data-urlencode "ConferenceStatusCallbackEvent=end" \
+      --data-urlencode "ConferenceStatusCallbackEvent=join" \
+      --data-urlencode "ConferenceStatusCallbackEvent=leave" \
+      --data-urlencode "ConferenceStatusCallbackEvent=hold"
+    ```
+
+    Save the participant's call ID (`CA…`) and the conference ID (`CF…`) from the response. Repeat the request with the first agent's phone number and `Label=agent`, then wait until both have joined (either via `join` callback events or by listing participants):
+
+    ```bash
+    curl "$BASE/Conferences/$CONFERENCE_ID/Participants.json" -u "$AUTH"
+    ```
+
+    Setting `EndConferenceOnExit=false` on every participant ensures the first agent can leave later without terminating the call for everyone else.
+  </Step>
+
+  <Step title="Hold the caller and bring in the next agent">
+    Place the caller on hold:
+
+    ```bash
+    curl "$BASE/Conferences/$CONFERENCE_ID/Participants/$CALLER_CALL_ID.json" -u "$AUTH" \
+      --data-urlencode "Hold=true"
+    ```
+
+    Confirm the hold from the `hold` event or by reading the participant. Then add the next agent to the same conference (exact same call as step 1, using their phone number and `Label=next-agent`). Wait for them to join before starting the briefing — the caller hears none of it.
+  </Step>
+
+  <Step title="Reconnect the caller and release the first agent">
+    Take the caller off hold, confirm they are unheld, and then end the first agent's call:
+
+    ```bash
+    # Take the caller off hold
+    curl "$BASE/Conferences/$CONFERENCE_ID/Participants/$CALLER_CALL_ID.json" -u "$AUTH" \
+      --data-urlencode "Hold=false"
+
+    # End the first agent's call
+    curl "$BASE/Calls/$AGENT_CALL_ID.json" -u "$AUTH" \
+      --data-urlencode "Status=completed"
+    ```
+
+    The caller and the next agent stay connected in the same conference on their original call legs.
+
+    <Tip>
+      To cancel a handoff before completing it, take the caller off hold and end the **next agent's** call instead.
+    </Tip>
+  </Step>
+</Steps>
+
+## Callback events
+
+Your callback URL receives form-encoded events signed with `X-Twilio-Signature`:
+
+- **Call leg events:** `initiated`, `ringing`, `answered`, `completed`
+- **Conference events:** conference `start`/`end`, plus per-participant `join`, `leave`, and `hold` changes
+
+Drive each handoff transition from these events rather than fixed delays.
+
+## Pricing
+
+Each of the three legs is billed as an outbound call, plus each participant's conference time at your `call.conference.participant` rate. Read each leg's settled `price` via `GET /calls/{call_id}`, and inspect full ledger entries in `GET /admin/billing/transactions`.

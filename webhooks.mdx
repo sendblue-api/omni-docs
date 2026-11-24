@@ -1,0 +1,157 @@
+---
+title: Webhooks
+description: Receive signed JSON events for messages, calls, numbers, 10DLC registration, and top-ups.
+---
+
+Register an HTTPS URL and the Omni API posts a signed JSON event to it whenever a subscribed resource changes state.
+
+## Register an endpoint
+
+Use an administrator session, the account token, or an API key holding `webhooks:manage`:
+
+```bash
+curl https://omni-api.sendblue.com/admin/webhooks \
+  -H "Authorization: Bearer $SENDBLUE_ADMIN_CREDENTIAL" \
+  -H "Idempotency-Key: 0b9f7f0e-hooks-production" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://hooks.example.com/sendblue",
+    "events": ["message.received", "message.delivered"]
+  }'
+```
+
+<Warning>
+  The first successful response (`201`) includes the endpoint's signing `secret`. **Store it immediately.** It is never returned again — an identical retry returns `200` without it.
+</Warning>
+
+Managing endpoints:
+
+- Each account can hold up to **16 endpoints** (active and disabled combined). Endpoints are enabled by default unless created with `"enabled": false`.
+- Use `GET`, `PATCH`, and `DELETE /admin/webhooks/{webhook_id}` to inspect, update, or remove an endpoint.
+- Use `POST /admin/webhooks/{webhook_id}/rotate_secret` (with a fresh `Idempotency-Key`) to generate a replacement signing secret once.
+- Changing the URL, disabling, rotating the secret, or deleting an endpoint cancels pending retry attempts for its previous configuration. A request already in flight may still arrive.
+
+## Event types
+
+| Type | Emitted when | `data` payload |
+| --- | --- | --- |
+| `message.received` | An inbound message arrives | Message (including text and `media_urls`) |
+| `message.sent`, `message.delivered`, `message.failed` | An outbound message reaches that state (`message.failed` also covers `undelivered`) | Message |
+| `message.updated` | Any other message status transition | Message |
+| `call.completed` | A call completes | Call |
+| `call.updated` | Any other observed call status change | Call |
+| `number.updated` | A number is acquired, configured, assigned to or removed from a campaign, activated, or released | Number routing configuration snapshot |
+| `brand.updated`, `campaign.updated` | 10DLC registration state, review, or membership changes | Brand or Campaign |
+| `top_up.updated` | A top-up is requested, gets its checkout link, settles, fails, or expires | Top-up |
+
+Every event uses the same envelope:
+
+```json
+{
+  "id": "EV0123456789abcdef0123456789abcdef",
+  "type": "message.delivered",
+  "created_at": "2026-11-23T18:04:07Z",
+  "data": {
+    "id": "SM0123456789abcdef0123456789abcdef",
+    "direction": "outbound_api",
+    "status": "delivered",
+    "to": "+14155550101",
+    "from": "+14155550100",
+    "campaign_id": null,
+    "body": "Your code is 482913",
+    "media_urls": [],
+    "segments": 1,
+    "price": { "amount_micro_usd": 7900, "currency": "USD" },
+    "error_code": null,
+    "status_callback": null,
+    "created_at": "2026-11-23T18:04:05Z",
+    "updated_at": "2026-11-23T18:04:07Z",
+    "sent_at": "2026-11-23T18:04:06Z"
+  }
+}
+```
+
+`data` is a snapshot captured at the transition. Because pricing can settle later, fetch the resource when you need its latest state. For a number's live capabilities, prices, and campaign status, call `GET /numbers/{phone_number}`.
+
+## Verify the signature
+
+Every delivery includes two headers:
+
+| Header | Format |
+| --- | --- |
+| `X-Sendblue-Signature` | `t=<unix seconds>,v1=<hex HMAC-SHA256>` |
+| `X-Sendblue-Delivery-Id` | UUID shared across automatic retries of one delivery |
+
+The signature is `HMAC-SHA256(secret_utf8, "<timestamp>." + raw_body_bytes)`. Verify before parsing JSON:
+
+1. Require exactly one `X-Sendblue-Signature` header.
+2. Read the exact raw request bytes before any JSON parser touches them.
+3. Reject timestamps more than 5 minutes (300 seconds) from your clock.
+4. Compute the HMAC and compare digests in constant time.
+
+<CodeGroup>
+
+```python Python
+import hashlib
+import hmac
+import json
+import re
+import time
+
+def verified_event(secret, signature_headers, raw_body):
+    if len(signature_headers) != 1:
+        raise ValueError("expected one signature")
+    match = re.fullmatch(r"t=([0-9]{1,12}),v1=([0-9a-f]{64})", signature_headers[0])
+    if not match or abs(int(time.time()) - int(match[1])) > 300:
+        raise ValueError("invalid signature or timestamp")
+    signed = match[1].encode("ascii") + b"." + raw_body
+    expected = hmac.new(secret.encode("utf-8"), signed, hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(expected, match[2]):
+        raise ValueError("invalid signature")
+    return json.loads(raw_body)
+```
+
+```javascript Node.js
+import crypto from "node:crypto";
+
+// signatureHeaders: req.headersDistinct["x-sendblue-signature"] (string[])
+// rawBody: Buffer of the exact bytes received before JSON parsing
+export function verifiedEvent(secret, signatureHeaders, rawBody) {
+  if (!Array.isArray(signatureHeaders) || signatureHeaders.length !== 1) {
+    throw new Error("expected one signature");
+  }
+  const match = /^t=([0-9]{1,12}),v1=([0-9a-f]{64})$/.exec(signatureHeaders[0]);
+  if (!match || Math.abs(Date.now() / 1000 - Number(match[1])) > 300) {
+    throw new Error("invalid signature or timestamp");
+  }
+  const expected = crypto
+    .createHmac("sha256", secret)
+    .update(Buffer.concat([Buffer.from(match[1] + ".", "ascii"), rawBody]))
+    .digest();
+  if (!crypto.timingSafeEqual(expected, Buffer.from(match[2], "hex"))) {
+    throw new Error("invalid signature");
+  }
+  return JSON.parse(rawBody.toString("utf8"));
+}
+```
+
+</CodeGroup>
+
+## Handle deliveries reliably
+
+Respond with any `2xx` status as soon as you durably store the event. Design your receiver for:
+
+- **Duplicates:** retries carry a fresh timestamp, the same event `id`, and the same delivery ID. Store the event `id` in the same transaction as your state change and ignore IDs you have already processed.
+- **Reordering:** events can arrive out of transition order.
+- **Timeouts:** a delivery can time out after your handler has already applied the change and will then be retried.
+
+## Retries, delivery log, and replay
+
+- **Retry schedule:** network failures and HTTP `408`, `425`, `429`, or `5xx` responses are retried up to **6 attempts** with waits of `1 min`, `5 min`, `30 min`, `2 hr`, and `8 hr`. Any other non-`2xx` response stops retries.
+- **30-day delivery log:** `GET /admin/webhooks/{webhook_id}/deliveries` lists delivery metadata (IDs, event type, status, attempt count, HTTP status, timestamps) for 30 days. No message or response bodies are stored there.
+- **7-day replay:** event bodies are retained for 7 days. Within that window, `POST /admin/webhooks/{webhook_id}/deliveries/{delivery_id}/replay` (with a new `Idempotency-Key`) re-sends the original event `id` and snapshot to the endpoint's current configuration under a new delivery ID.
+- **Erasure:** redacting or deleting a message — or deleting one of its media attachments — removes its stored event snapshots from future delivery and replay.
+
+<Info title="Status callbacks are separate">
+  Per-message `status_callback` URLs and call/TwiML callback URLs are a separate mechanism. They send Twilio-compatible form parameters signed with `X-Twilio-Signature`, not the signed JSON described here. Webhook endpoints receive their events independently.
+</Info>

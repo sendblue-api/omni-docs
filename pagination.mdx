@@ -1,0 +1,79 @@
+---
+title: Pagination
+description: List endpoints return a page of items and an opaque cursor for the next page.
+---
+
+Every list endpoint returns the same envelope:
+
+```json
+{
+  "data": [
+    { "id": "SM0123456789abcdef0123456789abcdef" }
+  ],
+  "next_cursor": "b3BhcXVlLWN1cnNvcg"
+}
+```
+
+Pass `next_cursor` back as the `cursor` query parameter to read the next page. When `next_cursor` is `null`, you have reached the end.
+
+```bash
+curl "https://omni-api.sendblue.com/messages?limit=100&cursor=b3BhcXVlLWN1cnNvcg" \
+  -H "Authorization: Bearer $SENDBLUE_KEY_ID.$SENDBLUE_KEY_SECRET"
+```
+
+## Rules
+
+- **`limit`** accepts `1` to `200` and defaults to `50`. Company contacts, tags, variables, and workflows return at most `100` per page.
+- **Opaque cursors:** treat `cursor` as an opaque token. It is only valid for the same account, route, and filters — omit `cursor` whenever you change a filter.
+- **Short or empty pages:** a page may contain fewer items than `limit`, and a page of contacts may be empty while later pages still have items. Keep paging until `next_cursor` is `null`.
+- **Unpaged endpoints:** `GET /numbers/available` (a live carrier search) and `GET /prices` are not paged; their `next_cursor` is always `null`.
+
+## Example
+
+<CodeGroup>
+
+```python Python
+import requests
+
+def read_all(path, auth, params=None):
+    params = dict(params or {})
+    while True:
+        response = requests.get(
+            "https://omni-api.sendblue.com" + path,
+            headers={"Authorization": f"Bearer {auth}"},
+            params=params,
+            timeout=15,
+        )
+        response.raise_for_status()
+        body = response.json()
+        yield from body["data"]
+        if body["next_cursor"] is None:
+            return
+        params["cursor"] = body["next_cursor"]
+```
+
+```javascript Node.js
+export async function* readAll(path, auth, params = {}) {
+  const query = new URLSearchParams(params);
+  while (true) {
+    const url = new URL(path, "https://omni-api.sendblue.com");
+    url.search = query.toString();
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${auth}` },
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+    }
+    const body = await response.json();
+    for (const item of body.data) {
+      yield item;
+    }
+    if (body.next_cursor === null) {
+      return;
+    }
+    query.set("cursor", body.next_cursor);
+  }
+}
+```
+
+</CodeGroup>

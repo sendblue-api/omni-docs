@@ -1,0 +1,85 @@
+---
+title: Request iMessage numbers
+description: Submit an order for iMessage lines and track fulfillment for your account.
+---
+
+iMessage numbers are provisioned by Sendblue rather than purchased instantaneously. Submit a request through the API, Sendblue reviews and sets up the lines, and the assigned numbers appear directly on your account.
+
+<Steps>
+  <Step title="Check your account's price">
+    ```bash
+    curl https://omni-api.sendblue.com/prices \
+      -H "Authorization: Bearer $SENDBLUE_KEY_ID.$SENDBLUE_KEY_SECRET"
+    ```
+
+    Look for `number.imessage.request`. If it is absent, your account does not have an iMessage number rate configured yet and order creation returns `422 unprocessable` (`price_unavailable`). Contact Sendblue to have a price assigned.
+  </Step>
+
+  <Step title="Submit the request">
+    ```bash
+    curl https://omni-api.sendblue.com/numbers/orders \
+      -H "Authorization: Bearer $SENDBLUE_KEY_ID.$SENDBLUE_KEY_SECRET" \
+      -H "Idempotency-Key: 4e7b1f0c-imessage-0001" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "channel": "imessage",
+        "quantity": 1,
+        "area_code": "415",
+        "note": "San Francisco preferred"
+      }'
+    ```
+
+    ```json
+    {
+      "id": "7ddf4982-fe66-4c75-a31f-41936b641ce7",
+      "channel": "imessage",
+      "quantity": 1,
+      "area_code": "415",
+      "note": "San Francisco preferred",
+      "price": "15.00",
+      "status": "pending",
+      "phone_numbers": [],
+      "reason": null,
+      "created_at": "2026-11-23T12:00:00.000000Z",
+      "updated_at": "2026-11-23T12:00:00.000000Z"
+    }
+    ```
+
+    - `quantity` accepts `1` to `100`. `area_code` and `note` are optional preferences.
+    - `price` is the total USD quote string for the requested quantity at your rate when submitted (the value above is illustrative).
+    - Required permissions: `number_orders:create` to create, `number_orders:read` to inspect/list, and `number_orders:cancel` to cancel.
+
+    <Note>
+      Recording an iMessage number request — and its fulfillment — does not debit your API balance.
+    </Note>
+  </Step>
+
+  <Step title="Track fulfillment">
+    ```bash
+    curl https://omni-api.sendblue.com/numbers/orders/7ddf4982-fe66-4c75-a31f-41936b641ce7 \
+      -H "Authorization: Bearer $SENDBLUE_KEY_ID.$SENDBLUE_KEY_SECRET"
+    ```
+
+    | Status | Meaning |
+    | --- | --- |
+    | `pending` | Waiting for Sendblue provisioning |
+    | `fulfilled` | Lines are ready; `phone_numbers` lists the assigned E.164 numbers |
+    | `declined` | Sendblue could not fulfill the request; `reason` explains why |
+    | `cancelled` | Cancelled by your account |
+
+    List all orders with `GET /numbers/orders`.
+  </Step>
+
+  <Step title="Send from your iMessage lines">
+    Fulfilled numbers appear in `GET /numbers` with `source: "requested"` and `"imessage"` in `channels`. Pass the number as `from` in `POST /messages`.
+
+    These lines are managed by Sendblue: they cannot be modified, assigned to a 10DLC campaign, or released through the API.
+  </Step>
+</Steps>
+
+## Cancel a pending request
+
+```bash
+curl -X DELETE https://omni-api.sendblue.com/numbers/orders/7ddf4982-fe66-4c75-a31f-41936b641ce7 \
+  -H "Authorization: Bearer $SENDBLUE_KEY_ID.$SENDBLUE_KEY_SECRET"
+```
