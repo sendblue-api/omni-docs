@@ -1,6 +1,6 @@
 ---
 title: Record a call
-description: Record outbound or inbound calls, list recordings, and download audio in WAV or MP3.
+description: Record outbound, inbound, or live calls, pause and stop recordings, and download audio in WAV or MP3.
 ---
 
 <Note>
@@ -34,6 +34,31 @@ description: Record outbound or inbound calls, list recordings, and download aud
     - `recording_status_callback`: receives `in_progress`, `completed`, and `absent` updates in Twilio's callback format (`X-Twilio-Signature`).
   </Tab>
 
+  <Tab title="On a call in progress">
+    Start a recording on a live call, inbound or outbound, with `POST /calls/{call_id}/recordings`. Every body member is optional; with no body, both parties are recorded on one channel:
+
+    ```bash
+    curl https://omni-api.sendblue.com/calls/CA0123456789abcdef0123456789abcdef/recordings \
+      -H "Authorization: Bearer $SENDBLUE_KEY_ID.$SENDBLUE_KEY_SECRET" \
+      -H "Idempotency-Key: 3d0a5b1c-recording-0001" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "channels": "dual",
+        "status_callback": "https://example.com/recordings",
+        "status_callback_events": ["in_progress", "completed"]
+      }'
+    ```
+
+    The `201` response is the recording with `"status": "processing"`; it becomes `in_progress` once the carrier has acknowledged the start.
+
+    - `channels`: `mono` (default) or `dual`. `dual` needs `track` to be `both`.
+    - `track`: `inbound`, `outbound`, or `both` (default).
+    - `trim`: `do_not_trim` (default) or `trim_silence`.
+    - `status_callback`: receives the events named in `status_callback_events` (`completed` alone when absent) in Twilio's callback format (`X-Twilio-Signature`).
+
+    The request answers `409 conflict` when the call is not in progress or already has a recording running, and `402 insufficient_funds` when your balance does not cover the longest recording the call can still make. Repeating it with the same `Idempotency-Key` returns the recording the first request started.
+  </Tab>
+
   <Tab title="With TwiML <Record>">
     To record an incoming call — or only part of a call — use the `<Record>` verb in your TwiML document:
 
@@ -46,6 +71,27 @@ description: Record outbound or inbound calls, list recordings, and download aud
     ```
   </Tab>
 </Tabs>
+
+## Pause, resume, or stop a recording
+
+Change a recording that is running with `PATCH /recordings/{recording_id}`:
+
+```bash
+curl -X PATCH https://omni-api.sendblue.com/recordings/RE0123456789abcdef0123456789abcdef \
+  -H "Authorization: Bearer $SENDBLUE_KEY_ID.$SENDBLUE_KEY_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{"status": "paused"}'
+```
+
+- `{"status": "paused"}` pauses capture.
+- `{"status": "in_progress"}` resumes it.
+- `{"status": "stopped"}` ends the recording; it moves to `processing` and then `completed`.
+
+The change is queued for the carrier: the `200` response is the recording as it is now, and its `status` follows once the carrier has acknowledged. Asking for the state a recording is already in succeeds and changes nothing. A recording that is not in a state the change applies to answers `409 conflict`.
+
+## Recording callbacks
+
+Recording status callbacks, and the `action` requests of `<Record>` and of a recorded `<Dial>`, carry a `RecordingUrl`. It is the recording's audio route on this API, `https://omni-api.sendblue.com/recordings/{recording_id}/audio`, and needs the same bearer credentials as the download below. It answers with WAV audio; add `?format=mp3` for MP3. Appending `.mp3` or `.wav` to the link does not select a format.
 
 ## Retrieve and manage recordings
 
@@ -68,7 +114,7 @@ description: Record outbound or inbound calls, list recordings, and download aud
       -o recording.mp3
     ```
 
-    `format` accepts `wav` (default) or `mp3`. Audio is served only to your account's credentials — no public or unauthenticated link exists.
+    `format` accepts `wav` (default) or `mp3`. Audio is served only to your account's bearer credentials — no public or unauthenticated link exists.
   </Step>
 
   <Step title="Delete a recording">

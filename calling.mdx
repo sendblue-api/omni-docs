@@ -1,10 +1,10 @@
 ---
 title: Calling
 sidebarTitle: Overview
-description: Place, receive, control, and record US phone calls with TwiML, plus warm handoffs.
+description: Place, receive, control, and record US phone calls with TwiML, plus conferences, queues, and live media.
 ---
 
-Place and receive US phone calls on numbers you own in Omni. Purchased US numbers support voice immediately with no 10DLC campaign registration. Calls execute TwiML documents (inline or hosted at your URL), support live redirection and call recording, and emit signed `call.updated` and `call.completed` webhooks.
+Place and receive US phone calls on numbers you own in Omni. Purchased US numbers support voice immediately with no 10DLC campaign registration. Calls execute TwiML documents (inline or hosted at your URL), support live redirection, recording, conferences, queues, and live media sessions, and emit signed `call.updated` and `call.completed` webhooks.
 
 ## Guides
 
@@ -13,10 +13,10 @@ Place and receive US phone calls on numbers you own in Omni. Purchased US number
     Start outbound calls with TwiML, control active calls, and configure inbound `voice_url` routing.
   </Card>
   <Card title="Record a call" icon="mic" href="/quickstart/record-a-call" arrow="true">
-    Record full calls or TwiML `<Record>` segments, list recordings, and download WAV or MP3 audio.
+    Record full calls, live calls, or TwiML `<Record>` segments; pause, resume, and stop; download WAV or MP3 audio.
   </Card>
   <Card title="Warm handoff" icon="phone-forwarded" href="/quickstart/warm-handoff" arrow="true">
-    Hold a caller, brief a second agent privately, and leave them connected via `/t` conference routes.
+    Hold a caller in a conference, brief a second agent privately, and leave them connected.
   </Card>
   <Card title="Webhooks" icon="webhook" href="/webhooks" arrow="true">
     Subscribe to signed `call.updated` and `call.completed` events on your HTTPS endpoint.
@@ -33,7 +33,7 @@ Place and receive US phone calls on numbers you own in Omni. Purchased US number
     Call `POST /calls` with an `Idempotency-Key` and either inline `twiml` or a `url` returning TwiML. For inbound calls, set `voice_url` on the number via `PATCH /numbers/{phone_number}`.
   </Step>
   <Step title="Control, record, and follow calls">
-    Redirect or end active calls with `PATCH /calls/{call_id}`, download completed recordings from `GET /recordings/{recording_id}/audio`, and subscribe a [webhook](/webhooks) to `call.updated` and `call.completed`.
+    Redirect or end active calls with `PATCH /calls/{call_id}`, start and control recordings, download completed audio from `GET /recordings/{recording_id}/audio`, and subscribe a [webhook](/webhooks) to `call.updated` and `call.completed`.
   </Step>
 </Steps>
 
@@ -42,8 +42,15 @@ Place and receive US phone calls on numbers you own in Omni. Purchased US number
 | Capability | Details |
 | --- | --- |
 | **Voice readiness** | Active immediately after number purchase — no 10DLC registration required. |
-| **Supported TwiML** | `<Say>`, `<Play>`, `<Pause>`, `<Gather>` (keypad), `<Dial>`, `<Record>`, `<Redirect>`, `<Reject>`, and `<Hangup>`. |
+| **Supported TwiML** | `<Say>`, `<Play>`, `<Pause>`, `<Gather>` (keypad), `<Dial>`, `<Record>`, `<Redirect>`, `<Reject>`, and `<Hangup>`; `<Dial><Conference>`, `<Enqueue>`, `<Dial><Queue>`, and `<Leave>` for conferences and queues; `<Start>` with `<Stream>`, `<Siprec>`, or `<Transcription>` for live media. |
 | **Call limits** | Ring timeout `5`–`120`s (default `60`s); max answered duration `30`–`14,400`s (default `14,400`s). |
-| **Recordings** | `mono` or `dual` channels; `inbound`, `outbound`, or `both` tracks; authenticated `wav` or `mp3` downloads. |
-| **Conferences & handoffs** | Supported through the Twilio-compatible conference routes under `/t` on the same host and account; call legs share the same `CA…` IDs. |
-| **Pricing** | `GET /prices` lists `call.outbound` and `call.conference.participant`. Call recording and answering-machine detection are priced on your account separately. |
+| **Recordings** | `mono` or `dual` channels; `inbound`, `outbound`, or `both` tracks; start on a live call with `POST /calls/{call_id}/recordings`; pause, resume, or stop with `PATCH /recordings/{recording_id}`; authenticated `wav` or `mp3` downloads. |
+| **Conferences & handoffs** | Invite participants by phone number with `POST /conferences/{conference_id}/participants` (a conference name works too); hold, mute, or coach with `PATCH /conferences/{conference_id}/participants/{participant}`; end the room with `PATCH /conferences/{conference_id}`. Every participant is an ordinary call with a `CA…` ID. See [Warm handoff](/quickstart/warm-handoff). |
+| **Queues** | Create and manage call queues with `POST /queues` and `PATCH /queues/{queue_id}`. Calls enter a queue through TwiML `<Enqueue>` and are connected through `<Dial><Queue>`; list waiting calls with `GET /queues/{queue_id}/members` and dequeue one to a new TwiML URL with `PATCH /queues/{queue_id}/members/{member}`. |
+| **Media streams** | `POST /calls/{call_id}/streams` sends a live call's audio to your `wss://` WebSocket server; stop it with `PATCH /calls/{call_id}/streams/{stream}`. |
+| **SIPREC** | `POST /calls/{call_id}/siprec` sends a live call's audio to the SIPREC recorder of a connector configured for your account; stop it with `PATCH /calls/{call_id}/siprec/{session}`. |
+| **Live transcription** | `POST /calls/{call_id}/transcriptions` transcribes a live call as it is spoken and sends each utterance to your `status_callback`; stop it with `PATCH /calls/{call_id}/transcriptions/{session}`. |
+| **Call events** | `GET /calls/{call_id}/events` lists the TwiML requests and status callbacks a call made to your servers, with what your server answered. Readable 15 minutes after the call ends and kept for 30 days. |
+| **Call records** | `DELETE /calls/{call_id}` removes a finished call's record and its event history. Charges and recordings are not changed. |
+| **Callback format** | TwiML requests and per-request callbacks (call, conference, recording, stream, SIPREC, and transcription status) use Twilio's form-encoded parameters, and media stream WebSocket messages keep Twilio's format. Requests are signed with `X-Twilio-Signature`. |
+| **Pricing** | `GET /prices` lists `call.outbound` and `call.conference.participant`. Call recording, answering-machine detection, media streams, SIPREC, and live transcription are priced on your account separately; a media stream, SIPREC session, or live transcription is billed per second and answers `503 unavailable` when your account has no rate for it. |

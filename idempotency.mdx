@@ -24,12 +24,12 @@ If a network timeout or `503` leaves you unsure whether the request succeeded, s
 
 ## Operations that require `Idempotency-Key`
 
-The API reference marks `Idempotency-Key` on every endpoint that accepts it. All 18 live operations that require it:
+The API reference marks `Idempotency-Key` on every endpoint that accepts it. All 24 live operations that require it:
 
 | Area | Operations |
 | --- | --- |
 | **Messaging & media** | `POST /messages`, `POST /media` |
-| **Voice** | `POST /calls` |
+| **Voice** | `POST /calls`, `POST /conferences/{conference_id}/participants`, `POST /calls/{call_id}/recordings`, `POST /calls/{call_id}/streams`, `POST /calls/{call_id}/siprec`, `POST /calls/{call_id}/transcriptions`, `POST /queues` |
 | **Numbers & 10DLC** | `POST /numbers`, `POST /numbers/orders`, `POST /brands`, `PATCH /brands/{brand_id}`, `POST /campaigns` |
 | **Company resources** | `POST /contacts`, `POST /tags`, `POST /variables` |
 | **Accounts & billing** | `POST /accounts`, `POST /admin/subaccounts`, `POST /admin/keys`, `POST /admin/billing/top_ups` |
@@ -39,7 +39,10 @@ The API reference marks `Idempotency-Key` on every endpoint that accepts it. All
 
 | Resource | Replay behaviour |
 | --- | --- |
-| **Messages & calls** | Repeating a key produces one message or one call, even across this API and the Twilio-compatible API under `/t`. |
+| **Messages & calls** | Repeating a key produces one message or one call. |
+| **Conference participants** | Repeating a key returns the same participant and places one call. A key that was used for another conference or another body answers `409 idempotency_conflict`. |
+| **Recordings & media sessions** | Repeating a key on a recording, media stream, SIPREC session, or live transcription start returns the one the first request started. A key that was used with other options, or for a recording of another call, answers `409 conflict`. |
+| **Queues** | Repeating a key returns the same queue. The key with another `name` or `max_size` answers `409 idempotency_conflict`; a key whose queue was since renamed or resized is refused the same way, and one whose queue was deleted creates a new queue. |
 | **Brands & campaigns** | Replaying returns the original registration and charges once. A different payload under the same key answers `409 idempotency_conflict`. |
 | **Number purchases** | Purchases are keyed by account and phone number. Repeating a purchase for the same number — under any key — joins the first order and never places a second. |
 | **Top-ups** | Repeating a key with the same amount returns the original checkout. |
