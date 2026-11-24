@@ -48,7 +48,11 @@ A message that is never reported delivered stays `sent`. Delivery reports depend
 
 ### Read receipts
 
-Read receipts are not available. A message's status does not go past `delivered`.
+When the recipient shares read receipts, the message gets a `read_at` timestamp and a `message.read` event is sent once.
+
+- `status` stays `delivered`. There is no `read` status.
+- `read_at` is the time Sendblue received the device's report that the message was read. The device reports that it was read, not when, so this is not the time of reading. It can be later than the actual moment.
+- `read_at` is set once and does not change. It is absent on a message that has not been reported read, and on messages from recipients who do not share read receipts.
 
 ## iMessage and SMS fallback
 
@@ -92,7 +96,7 @@ What arrives as a Message:
 - Text up to 1,600 characters.
 - Attachments, listed in order in `media_urls`. Each URL is an Omni Media resource and needs your account's credentials to download.
 
-What does not arrive. These are dropped, and no Message or event is created:
+What does not arrive. These are dropped: no Message or event is created, and they cannot be recovered later.
 
 - Group messages and group changes.
 - Messages from numbers outside the US.
@@ -101,6 +105,7 @@ What does not arrive. These are dropped, and no Message or event is created:
 - Tapback reactions and shared locations.
 - Other items that are not ordinary messages.
 - Messages that were on the line before it was assigned to your account.
+- A message with no text whose attachment could not be read from the line's device within an hour, or whose attachment could not be placed in the message.
 
 ## Webhooks
 
@@ -110,6 +115,7 @@ Register an endpoint and verify signatures as described in [Webhooks](/webhooks)
 | --- | --- |
 | `message.sent` | The device reports the message sent |
 | `message.delivered` | The device reports it delivered |
+| `message.read` | The device reports the recipient read it. Sent once. |
 | `message.failed` | The message failed |
 | `message.received` | An inbound message arrived |
 | `message.updated` | Any other status change |
@@ -171,7 +177,7 @@ An inbound message:
 }
 ```
 
-There is no `message.read` event.
+A `message.read` event carries the same Message with `read_at` set and `status` still `delivered`.
 
 ## Limits
 
@@ -233,5 +239,7 @@ Other failures carry an `error_code` without a `failure` object. They are not ch
 | SMS fallback, `channel`, and charging by final service | Automated tests against a simulated device. Not yet observed on a physical device. |
 | The 15-minute settling time | A chosen default. The time a device takes to resend an iMessage as SMS has not been measured. |
 | Inbound attachments, including several in one message | Automated tests against a simulated device |
+| Read receipts (`read_at`, `message.read`) | Automated tests against a simulated device |
+| Dropping of group messages, tapbacks, shared locations and other unsupported inbound items | Automated tests against a simulated device |
 | Webhook events for iMessage-line messages | Automated tests. Not yet checked against a real line. |
 | Line limits | Automated tests |

@@ -3891,6 +3891,13 @@ components:
               - imessage_strict_mode_unenforceable
             message:
               type: string
+        read_at:
+          $ref: '#/components/schemas/Timestamp'
+          description: When Omni received the sending device's first report that the recipient read the
+            message. The device reports only that the message was read, not when, so this is the time
+            of receipt of that report and not the time of reading. Present only on a message sent from
+            an iMessage line whose recipient shares read receipts. It is set once and never moves. The
+            status stays delivered.
         id:
           type: string
         direction:
@@ -6306,8 +6313,12 @@ components:
       type: string
       description: |
         The message.sent, message.delivered, message.failed and message.received types
-        describe those transitions. Other emitted message lifecycle changes use
-        message.updated. A completed call emits call.completed. Other emitted
+        describe those transitions. message.read is emitted once when the sending
+        device first reports that the recipient read a message sent from an
+        iMessage line. Its data is the Message with read_at, and its status is
+        still delivered. read_at is the time Omni received that report, because
+        the device does not report when the message was read. Other emitted
+        message lifecycle changes use message.updated. A completed call emits call.completed. Other emitted
         call transitions use call.updated. Number acquisition, routing, campaign
         assignment, activation and release emit number.updated. Registration
         changes emit brand.updated and campaign.updated with their public resource.
@@ -6316,6 +6327,7 @@ components:
       enum:
       - message.sent
       - message.delivered
+      - message.read
       - message.failed
       - message.received
       - message.updated
@@ -6352,6 +6364,7 @@ components:
             enum:
             - message.sent
             - message.delivered
+            - message.read
             - message.failed
             - message.received
             - message.updated
@@ -6432,7 +6445,7 @@ components:
         events:
           type: array
           minItems: 1
-          maxItems: 11
+          maxItems: 12
           uniqueItems: true
           items:
             $ref: '#/components/schemas/EventType'
@@ -6465,7 +6478,7 @@ components:
         events:
           type: array
           minItems: 1
-          maxItems: 11
+          maxItems: 12
           uniqueItems: true
           items:
             $ref: '#/components/schemas/EventType'
@@ -6497,7 +6510,7 @@ components:
         events:
           type: array
           minItems: 1
-          maxItems: 11
+          maxItems: 12
           uniqueItems: true
           items:
             $ref: '#/components/schemas/EventType'
@@ -6517,7 +6530,7 @@ components:
         events:
           type: array
           minItems: 1
-          maxItems: 11
+          maxItems: 12
           uniqueItems: true
           items:
             $ref: '#/components/schemas/EventType'
