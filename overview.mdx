@@ -1,6 +1,6 @@
 ---
 title: API overview
-description: Base URL, credential check, conventions, and how the JSON API relates to /t.
+description: Base URL, credential check, and conventions.
 ---
 
 The Omni API lives at `https://omni-api.sendblue.com`. Routes mount at the root of the host with no version prefix, and requests and responses use JSON with `snake_case` field names.
@@ -62,6 +62,6 @@ curl https://omni-api.sendblue.com/me \
   </Card>
 </CardGroup>
 
-<Info title="Two APIs on one host">
-  The JSON API documented here is the surface to build on. The same host also serves a frozen Twilio-compatible API under `/t` that keeps existing integrations working without new features. A message, number, call, or recording is the same resource on both with the same ID. The [warm handoff](/quickstart/warm-handoff) quickstart uses the conference routes under `/t` because this API has no native conference operation yet. Calls and messages are for US numbers.
+<Info title="Callbacks keep Twilio's request format">
+  Everything you call is JSON with bearer credentials. The requests Omni sends to the URLs you put on a message, call, or number (`status_callback`, `voice_url`, and the other per-request callback and TwiML URLs) are a separate mechanism: they use Twilio's form-encoded parameters and are signed with `X-Twilio-Signature`. [Webhook endpoints](/webhooks) receive signed JSON events. Calls and messages are for US numbers.
 </Info>

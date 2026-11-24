@@ -85,18 +85,19 @@ description: Get a signed webhook event at your HTTPS URL whenever someone texts
 
 ## Pictures and other MMS attachments
 
-Inbound MMS messages list their attachments in `media_urls`. These URLs point to authenticated Media resources on this API (never the carrier's raw URLs) and are served only to the account that owns the message.
+Inbound MMS messages list their attachments in `media_urls`. Each URL is `GET /messages/{message_id}/media/{media_id}` on this API (never the carrier's raw URL) and is served only to the account that owns the message. `MediaUrl{n}` in a number's inbound-message callback is the same address.
 
-Fetch them with **HTTP Basic authentication** using your account ID and account token (or a standard `SK…` API key and secret), and follow the `302` redirect:
+Request it with the same bearer credentials as any other route (the credential needs `messages:read`). The API answers `302` with a `Location` header holding a short-lived download link, so a client that follows redirects reads the file in one call:
 
 ```bash
-curl -L -u "$SENDBLUE_ACCOUNT_ID:$SENDBLUE_ACCOUNT_TOKEN" \
-  "https://omni-api.sendblue.com/2010-04-01/Accounts/$SENDBLUE_ACCOUNT_ID/Messages/SM0123456789abcdef0123456789abcdef/Media/ME0123456789abcdef0123456789abcdef" \
+curl -L \
+  -H "Authorization: Bearer $SENDBLUE_KEY_ID.$SENDBLUE_KEY_SECRET" \
+  "https://omni-api.sendblue.com/messages/SM0123456789abcdef0123456789abcdef/media/ME0123456789abcdef0123456789abcdef" \
   -o attachment.png
 ```
 
 <Note>
-  Inbound Media resource URLs require HTTP Basic auth with your account token or a `standard` API key. `Authorization: Bearer` tokens and keys with custom/narrowed permissions are not accepted on these URLs.
+  The download link in `Location` is valid for four hours and serves the file, with its content type, without further credentials. Treat it as a secret, and request the media URL again when you need a fresh one. A deleted attachment answers `404 not_found`.
 </Note>
 
 ## Read inbound messages without a webhook

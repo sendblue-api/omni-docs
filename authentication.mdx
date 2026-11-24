@@ -69,7 +69,6 @@ Key rules:
 - When both `role` and `permissions` are given, `permissions` must be a subset of the preset.
 - A key can only grant permissions it holds itself, and an expiring key cannot issue one that outlives it.
 - To change a key's grants, create a new key and revoke the old one with `DELETE /admin/keys/{key_id}`. Revoked and expired keys stop authenticating immediately.
-- Keys with a custom or narrowed permission list work only on this JSON API. The Twilio-compatible API under `/t` accepts standard keys and account tokens.
 
 When a credential lacks permission for an endpoint, the API answers `403 permission_denied` with `error.details.required_permission` naming the missing grant. Every endpoint in the API reference states its required permission.
 
