@@ -167,7 +167,8 @@
             "group": "P2P iMessage",
             "pages": [
               "p2p-imessage",
-              "quickstart/imessage-numbers"
+              "quickstart/imessage-numbers",
+              "imessage-messaging"
             ]
           },
           {

@@ -1,0 +1,236 @@
+---
+title: Send and receive on iMessage lines
+sidebarTitle: Send and receive
+description: What happens to a message on a Sendblue-managed iMessage line, how it is billed, what you receive, and what is not supported.
+---
+
+This page describes how messaging behaves on an iMessage line once it is on your account. To get a line, see [Request iMessage numbers](/quickstart/imessage-numbers).
+
+Each statement here is enforced by the API. Where a behavior has been tested only in simulation and not yet on a physical device, the page says so in [What has been proven](#what-has-been-proven).
+
+## Send a message
+
+```bash
+curl https://omni-api.sendblue.com/messages \
+  -H "Authorization: Bearer $SENDBLUE_KEY_ID.$SENDBLUE_KEY_SECRET" \
+  -H "Idempotency-Key: 6f1d2c9a-order-1042" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "from": "+14155550100",
+    "to": "+14155550101",
+    "body": "Your order has shipped."
+  }'
+```
+
+- `from` is one of your iMessage lines. `to` is a US number in E.164.
+- `body` is text, up to 1,600 characters.
+- The price is held from your balance when the message is accepted. See [Billing](#billing).
+- Send an `Idempotency-Key` with every request. See [Idempotency](/idempotency).
+
+## Message states
+
+| `status` | Meaning |
+| --- | --- |
+| `queued` | Accepted. Waiting for the line's device. |
+| `sending` | Handed to the device. |
+| `sent` | The device reports it sent the message. |
+| `delivered` | The device reports the recipient's device received it. |
+| `failed` | The message was not sent. `error_code` is set, and `failure` is present when you can act on the cause. |
+
+Two more fields describe an iMessage-line message:
+
+| Field | Values | Meaning |
+| --- | --- | --- |
+| `delivery_evidence` | `verified`, `reported`, `reported_unconfirmed`, `unknown` | How strongly the device's report that it sent the message is supported. `verified` is read from the device's own record. `reported` is an authenticated report confirmed by a second check. `reported_unconfirmed` is a report without that confirmation. |
+| `billing_status` | `held`, `charged`, `uncharged`, `review` | Where the price stands. See [Billing](#billing). |
+
+A message that is never reported delivered stays `sent`. Delivery reports depend on the recipient's device and are not guaranteed.
+
+### Read receipts
+
+Read receipts are not available. A message's status does not go past `delivered`.
+
+## iMessage and SMS fallback
+
+A line runs in one of two modes. Sendblue sets the mode per line; you cannot change it through the API.
+
+| Mode | What it sends | `channel` |
+| --- | --- | --- |
+| iMessage only | iMessage, or nothing. A recipient who cannot receive iMessage gets no message and the send fails. | `imessage` once the device reports the message sent |
+| iMessage with SMS fallback | iMessage when the recipient can receive it. Otherwise the line's own device sends an SMS from the same number. | `imessage` or `sms`: the service the device last reported |
+
+- `channel` is absent until the device reports a service.
+- On a fallback line, `channel` can change from `imessage` to `sms` after the message is `sent`, if the device resends an undelivered iMessage as SMS.
+- The fallback SMS is sent by the line's device from the line's own number. It is not sent through a carrier messaging route, and a message that fails on the device is not retried another way.
+- `segments` is set for a message sent as SMS.
+
+## Billing
+
+Two prices apply. Check them with `GET /prices`.
+
+| Price | Charged for |
+| --- | --- |
+| `imessage.device.outbound.message` | One message sent as iMessage |
+| `sms.device.outbound.segment` | Each segment of a message sent as SMS by the line's device |
+
+A message is charged once, for the service it was finally sent by.
+
+- **At acceptance** the price is held. On a fallback line the hold covers the dearer of the two outcomes, and the difference is returned when the charge is made.
+- **Sent as SMS:** charged when the device reports it.
+- **Sent as iMessage on a fallback line:** charged when the device reports it delivered, or when its `sent` report has stood for the line's settling time with no report of another service. The settling time is 15 minutes unless Sendblue has set another value for the line. Until then `billing_status` is `held`.
+- **Sent as iMessage on an iMessage-only line:** charged when the device reports it sent.
+- **Failed:** not charged. The hold is returned and `billing_status` is `uncharged`.
+- **`review`:** the device reported a different service after the charge was made, or reported a send late. The charge is not changed automatically; Sendblue reviews it.
+
+## Receive messages
+
+Subscribe a [webhook](/webhooks) to `message.received`, or list messages with `GET /messages`.
+
+What arrives as a Message:
+
+- One-to-one messages from US numbers, sent to your line as iMessage or SMS.
+- Text up to 1,600 characters.
+- Attachments, listed in order in `media_urls`. Each URL is an Omni Media resource and needs your account's credentials to download.
+
+What does not arrive. These are dropped, and no Message or event is created:
+
+- Group messages and group changes.
+- Messages from numbers outside the US.
+- RCS messages.
+- Messages longer than 1,600 characters.
+- Items that are not ordinary messages.
+- Messages that were on the line before it was assigned to your account.
+
+## Webhooks
+
+Register an endpoint and verify signatures as described in [Webhooks](/webhooks). Message events for iMessage lines use the same envelope as every other message. They also carry `channel`, and `failure` on a failed message. They do not carry `delivery_evidence` or `billing_status`: read the message with `GET /messages/{message_id}` for those.
+
+| Event | When |
+| --- | --- |
+| `message.sent` | The device reports the message sent |
+| `message.delivered` | The device reports it delivered |
+| `message.failed` | The message failed |
+| `message.received` | An inbound message arrived |
+| `message.updated` | Any other status change |
+
+A delivered iMessage:
+
+```json
+{
+  "id": "EV0123456789abcdef0123456789abcdef",
+  "type": "message.delivered",
+  "created_at": "2026-11-24T19:54:42Z",
+  "data": {
+    "id": "SM0123456789abcdef0123456789abcdef",
+    "direction": "outbound_api",
+    "status": "delivered",
+    "to": "+14155550101",
+    "from": "+14155550100",
+    "campaign_id": null,
+    "body": "Your order has shipped.",
+    "media_urls": [],
+    "segments": null,
+    "price": { "amount_micro_usd": 10000, "currency": "USD" },
+    "error_code": null,
+    "status_callback": null,
+    "channel": "imessage",
+    "created_at": "2026-11-24T19:54:30Z",
+    "updated_at": "2026-11-24T19:54:42Z",
+    "sent_at": "2026-11-24T19:54:36Z"
+  }
+}
+```
+
+The price shown is illustrative. `data` is a snapshot taken at the transition. On a fallback line the charge is made after `sent`, so `price` can be `null` in a `message.sent` event; read the message for its settled price.
+
+An inbound message:
+
+```json
+{
+  "id": "EV1123456789abcdef0123456789abcdef",
+  "type": "message.received",
+  "created_at": "2026-11-24T19:54:54Z",
+  "data": {
+    "id": "SM1123456789abcdef0123456789abcdef",
+    "direction": "inbound",
+    "status": "received",
+    "to": "+14155550100",
+    "from": "+14155550101",
+    "campaign_id": null,
+    "body": "Thanks!",
+    "media_urls": [],
+    "segments": null,
+    "price": null,
+    "error_code": null,
+    "status_callback": null,
+    "created_at": "2026-11-24T19:54:54Z",
+    "updated_at": "2026-11-24T19:54:54Z",
+    "sent_at": null
+  }
+}
+```
+
+There is no `message.read` event.
+
+## Limits
+
+| Limit | Value |
+| --- | --- |
+| Recipients | US numbers only, one recipient per message |
+| Text | 1,600 characters |
+| Outbound attachments | Not available on these lines. A send with `media_ids` or media URLs is refused with `422 unprocessable`, reason `sender_unavailable`. |
+| Scheduled sends | Not available: `send_at` needs a campaign |
+| Group messages | Not available, in either direction |
+
+Each line also has sending limits that Sendblue sets for it. A send over a limit is refused with `429 rate_limited`, and the error's `message` names which one:
+
+| Message | Limit |
+| --- | --- |
+| Sender per-second limit reached | Sends per second from the line |
+| Sender daily iMessage conversation limit reached | Distinct iMessage conversations per day |
+| Sender iMessage response rate below its floor | Share of recent recipients who replied |
+| Sender hourly new-recipient limit reached | New recipients per hour |
+| Sender daily new-recipient limit reached | New recipients per day |
+
+None of these limits applies to a recipient who messaged the line in the last 24 hours. The values are per line and are not published through the API.
+
+## Errors
+
+Request errors follow [Errors](/errors). These are specific to iMessage lines:
+
+| Response | Cause | What to do |
+| --- | --- | --- |
+| `422 unprocessable`, reason `sender_unavailable` | The line is not ready to send, or the request carries media | Check the line with `GET /numbers/{phone_number}`. Remove media. |
+| `402 insufficient_funds` | The balance cannot cover the hold | Add funds |
+| `429 rate_limited` with one of the limit messages above | A line limit | Wait, or spread sends across lines |
+
+A message can also fail after it is accepted. Read `error_code` and `failure` on the Message or in the `message.failed` event:
+
+```json
+{
+  "status": "failed",
+  "error_code": 5504,
+  "failure": {
+    "code": "imessage_strict_mode_unenforceable",
+    "message": "..."
+  }
+}
+```
+
+| `failure.code` | `error_code` | Meaning | What to do |
+| --- | --- | --- | --- |
+| `imessage_strict_mode_unenforceable` | `5504` | The line is in iMessage-only mode and its device cannot enforce it, so nothing was sent | Contact Sendblue to have the line's mode changed. Retrying does not help. |
+
+Other failures carry an `error_code` without a `failure` object. They are not charged.
+
+## What has been proven
+
+| Behavior | Evidence |
+| --- | --- |
+| Outbound text, `sent` then `delivered`, charged once | A real device and handset in production |
+| Inbound text reply | A real device and handset in production |
+| SMS fallback, `channel`, and charging by final service | Automated tests against a simulated device. Not yet observed on a physical device. |
+| The 15-minute settling time | A chosen default. The time a device takes to resend an iMessage as SMS has not been measured. |
+| Inbound attachments, including several in one message | Automated tests against a simulated device |
+| Webhook events for iMessage-line messages | Automated tests. Not yet checked against a real line. |
+| Line limits | Automated tests |

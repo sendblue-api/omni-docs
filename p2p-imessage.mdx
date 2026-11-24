@@ -12,8 +12,8 @@ Send and receive messages over Sendblue-managed US iMessage lines through the sa
   <Card title="Request iMessage numbers" icon="smartphone" href="/quickstart/imessage-numbers" arrow="true">
     Check pricing, submit an order with `POST /numbers/orders`, and track fulfillment.
   </Card>
-  <Card title="Upload and send media" icon="image" href="/quickstart/media" arrow="true">
-    Upload a file with `POST /media` and attach it to an outbound iMessage.
+  <Card title="Send and receive" icon="message-circle" href="/imessage-messaging" arrow="true">
+    Message states, SMS fallback, billing, what you receive, limits and errors.
   </Card>
   <Card title="Receive messages" icon="inbox" href="/quickstart/receive-sms" arrow="true">
     Receive signed `message.received` webhook events and poll inbound messages.
@@ -44,6 +44,6 @@ Send and receive messages over Sendblue-managed US iMessage lines through the sa
 | **Provisioning** | Requested via `POST /numbers/orders` (`channel: "imessage"`, quantity `1`–`100`). Cancel pending orders with `DELETE /numbers/orders/{order_id}`. |
 | **Line management** | Managed by Sendblue — fulfilled iMessage lines cannot be configured, assigned to a 10DLC campaign, or released through the API. |
 | **Sending** | Pass an assigned iMessage number as `from` in `POST /messages` with an `Idempotency-Key`. |
-| **Attachments** | Attach **1** uploaded file per message using `media_ids` (JPEG, PNG, GIF, MP4, MP3, or PDF up to 4 MiB). |
+| **Attachments** | Inbound attachments arrive in `media_urls`. Outbound attachments are not available on these lines: a send with media is refused. See [Send and receive](/imessage-messaging#limits). |
 | **Delivery evidence** | `Message` records `delivery_evidence` (`verified`, `reported`, `reported_unconfirmed`, or `unknown`), `billing_status` (`held`, `charged`, `uncharged`, or `review`), and `channel` (`imessage` or `sms`) on lines that can fall back to device SMS. |
 | **Permissions** | `number_orders:create`, `number_orders:read`, `number_orders:cancel`, `messages:send`, and `messages:read`. |
