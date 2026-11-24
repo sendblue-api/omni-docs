@@ -1,0 +1,49 @@
+---
+title: Calling
+sidebarTitle: Overview
+description: Place, receive, control, and record US phone calls with TwiML, plus warm handoffs.
+---
+
+Place and receive US phone calls on numbers you own in Omni. Purchased US numbers support voice immediately with no 10DLC campaign registration. Calls execute TwiML documents (inline or hosted at your URL), support live redirection and call recording, and emit signed `call.updated` and `call.completed` webhooks.
+
+## Guides
+
+<CardGroup cols={2}>
+  <Card title="Place and receive a call" icon="phone-outgoing" href="/quickstart/calls" arrow="true">
+    Start outbound calls with TwiML, control active calls, and configure inbound `voice_url` routing.
+  </Card>
+  <Card title="Record a call" icon="mic" href="/quickstart/record-a-call" arrow="true">
+    Record full calls or TwiML `<Record>` segments, list recordings, and download WAV or MP3 audio.
+  </Card>
+  <Card title="Warm handoff" icon="phone-forwarded" href="/quickstart/warm-handoff" arrow="true">
+    Hold a caller, brief a second agent privately, and leave them connected via `/t` conference routes.
+  </Card>
+  <Card title="Webhooks" icon="webhook" href="/webhooks" arrow="true">
+    Subscribe to signed `call.updated` and `call.completed` events on your HTTPS endpoint.
+  </Card>
+</CardGroup>
+
+## How Calling works on Omni
+
+<Steps>
+  <Step title="Buy a US number">
+    Search with `GET /numbers/available` and buy with `POST /numbers`. Voice works as soon as the purchase completes — check `capabilities.calls` on `GET /numbers/{phone_number}`.
+  </Step>
+  <Step title="Place an outbound call or configure inbound routing">
+    Call `POST /calls` with an `Idempotency-Key` and either inline `twiml` or a `url` returning TwiML. For inbound calls, set `voice_url` on the number via `PATCH /numbers/{phone_number}`.
+  </Step>
+  <Step title="Control, record, and follow calls">
+    Redirect or end active calls with `PATCH /calls/{call_id}`, download completed recordings from `GET /recordings/{recording_id}/audio`, and subscribe a [webhook](/webhooks) to `call.updated` and `call.completed`.
+  </Step>
+</Steps>
+
+## At a glance
+
+| Capability | Details |
+| --- | --- |
+| **Voice readiness** | Active immediately after number purchase — no 10DLC registration required. |
+| **Supported TwiML** | `<Say>`, `<Play>`, `<Pause>`, `<Gather>` (keypad), `<Dial>`, `<Record>`, `<Redirect>`, `<Reject>`, and `<Hangup>`. |
+| **Call limits** | Ring timeout `5`–`120`s (default `60`s); max answered duration `30`–`14,400`s (default `14,400`s). |
+| **Recordings** | `mono` or `dual` channels; `inbound`, `outbound`, or `both` tracks; authenticated `wav` or `mp3` downloads. |
+| **Conferences & handoffs** | Supported through the Twilio-compatible conference routes under `/t` on the same host and account; call legs share the same `CA…` IDs. |
+| **Pricing** | `GET /prices` lists `call.outbound` and `call.conference.participant`. Call recording and answering-machine detection are priced on your account separately. |

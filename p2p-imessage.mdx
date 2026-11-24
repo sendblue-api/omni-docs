@@ -1,0 +1,49 @@
+---
+title: P2P iMessage
+sidebarTitle: Overview
+description: Request Sendblue-managed US iMessage lines, send messages and attachments, and receive signed webhooks.
+---
+
+Send and receive messages over Sendblue-managed US iMessage lines through the same messaging and webhook surface you use for the rest of the Omni API. Instead of registering a 10DLC campaign, you submit a number order for iMessage lines; once Sendblue sets them up, they appear directly on your account ready to send from `POST /messages`.
+
+## Guides
+
+<CardGroup cols={2}>
+  <Card title="Request iMessage numbers" icon="smartphone" href="/quickstart/imessage-numbers" arrow="true">
+    Check pricing, submit an order with `POST /numbers/orders`, and track fulfillment.
+  </Card>
+  <Card title="Upload and send media" icon="image" href="/quickstart/media" arrow="true">
+    Upload a file with `POST /media` and attach it to an outbound iMessage.
+  </Card>
+  <Card title="Receive messages" icon="inbox" href="/quickstart/receive-sms" arrow="true">
+    Receive signed `message.received` webhook events and poll inbound messages.
+  </Card>
+  <Card title="Authentication" icon="key-round" href="/authentication" arrow="true">
+    Use API key pairs, existing Sendblue API keys, or scoped keys.
+  </Card>
+</CardGroup>
+
+## How P2P iMessage works on Omni
+
+<Steps>
+  <Step title="Check your iMessage number price">
+    Call `GET /prices` and check for `number.imessage.request`. If it is absent, contact Sendblue to have a rate assigned to your account.
+  </Step>
+  <Step title="Request iMessage lines">
+    Submit `POST /numbers/orders` with `"channel": "imessage"` and your desired `quantity` (`1`–`100`), plus optional `area_code` and `note` preferences. Recording and fulfilling an order do not debit your balance.
+  </Step>
+  <Step title="Send and receive">
+    Once the order status reaches `fulfilled`, your lines appear in `GET /numbers` with `source: "requested"` and `"imessage"` in `channels`. Pass an assigned number as `from` in `POST /messages` and subscribe a [webhook](/webhooks) to `message.sent`, `message.delivered`, `message.failed`, and `message.received`.
+  </Step>
+</Steps>
+
+## At a glance
+
+| Capability | Details |
+| --- | --- |
+| **Provisioning** | Requested via `POST /numbers/orders` (`channel: "imessage"`, quantity `1`–`100`). Cancel pending orders with `DELETE /numbers/orders/{order_id}`. |
+| **Line management** | Managed by Sendblue — fulfilled iMessage lines cannot be configured, assigned to a 10DLC campaign, or released through the API. |
+| **Sending** | Pass an assigned iMessage number as `from` in `POST /messages` with an `Idempotency-Key`. |
+| **Attachments** | Attach **1** uploaded file per message using `media_ids` (JPEG, PNG, GIF, MP4, MP3, or PDF up to 4 MiB). |
+| **Delivery evidence** | `Message` records `delivery_evidence` (`verified`, `reported`, `reported_unconfirmed`, or `unknown`), `billing_status` (`held`, `charged`, `uncharged`, or `review`), and `channel` (`imessage` or `sms`) on lines that can fall back to device SMS. |
+| **Permissions** | `number_orders:create`, `number_orders:read`, `number_orders:cancel`, `messages:send`, and `messages:read`. |

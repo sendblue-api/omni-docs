@@ -3817,6 +3817,15 @@ components:
           - review
           description: The reservation is held, captured, released without charge, or awaiting review
             by Sendblue after a late affirmative report.
+        channel:
+          type: string
+          enum:
+          - imessage
+          - sms
+          description: The service the sending device last reported for a message sent from an iMessage
+            line that may fall back to the device's own SMS. Absent until the device reports one, and
+            absent on a line that sends iMessage only. The price is the one for the service in the device's
+            first report that it sent the message.
         id:
           type: string
         direction:

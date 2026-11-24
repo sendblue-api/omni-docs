@@ -2,7 +2,7 @@
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
   "name": "Sendblue Omni API",
-  "description": "Messaging and calling for US numbers: SMS, MMS, iMessage, voice, recordings and webhooks.",
+  "description": "Messaging and calling for US numbers: A2P SMS, P2P iMessage, voice, recordings and webhooks.",
   "logo": {
     "light": "/logo/sendblue-mark.svg",
     "dark": "/logo/sendblue-mark.svg",
@@ -80,11 +80,28 @@
     },
     "links": [
       {
-        "header": "Guides",
+        "header": "Products",
         "items": [
           {
-            "label": "Overview",
-            "href": "/"
+            "label": "A2P SMS",
+            "href": "/a2p-sms"
+          },
+          {
+            "label": "P2P iMessage",
+            "href": "/p2p-imessage"
+          },
+          {
+            "label": "Calling",
+            "href": "/calling"
+          }
+        ]
+      },
+      {
+        "header": "Platform",
+        "items": [
+          {
+            "label": "API overview",
+            "href": "/overview"
           },
           {
             "label": "Authentication",
@@ -97,27 +114,6 @@
           {
             "label": "Errors",
             "href": "/errors"
-          }
-        ]
-      },
-      {
-        "header": "Quickstarts",
-        "items": [
-          {
-            "label": "Send an SMS",
-            "href": "/quickstart/send-sms"
-          },
-          {
-            "label": "Receive an SMS",
-            "href": "/quickstart/receive-sms"
-          },
-          {
-            "label": "Place and receive a call",
-            "href": "/quickstart/calls"
-          },
-          {
-            "label": "Upload and send media",
-            "href": "/quickstart/media"
           }
         ]
       },
@@ -154,28 +150,42 @@
             "group": "Get started",
             "pages": [
               "index",
+              "overview",
               "authentication"
+            ]
+          },
+          {
+            "group": "A2P SMS",
+            "pages": [
+              "a2p-sms",
+              "quickstart/send-sms",
+              "quickstart/receive-sms",
+              "quickstart/media"
+            ]
+          },
+          {
+            "group": "P2P iMessage",
+            "pages": [
+              "p2p-imessage",
+              "quickstart/imessage-numbers"
+            ]
+          },
+          {
+            "group": "Calling",
+            "pages": [
+              "calling",
+              "quickstart/calls",
+              "quickstart/record-a-call",
+              "quickstart/warm-handoff"
             ]
           },
           {
             "group": "Core concepts",
             "pages": [
+              "webhooks",
               "idempotency",
               "errors",
-              "pagination",
-              "webhooks"
-            ]
-          },
-          {
-            "group": "Quickstarts",
-            "pages": [
-              "quickstart/send-sms",
-              "quickstart/receive-sms",
-              "quickstart/calls",
-              "quickstart/record-a-call",
-              "quickstart/media",
-              "quickstart/warm-handoff",
-              "quickstart/imessage-numbers"
+              "pagination"
             ]
           }
         ]

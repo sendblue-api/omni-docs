@@ -1,0 +1,52 @@
+---
+title: A2P SMS
+sidebarTitle: Overview
+description: Send and receive US SMS and MMS over 10DLC with brand/campaign registration, number provisioning, media uploads, and webhooks.
+---
+
+Send and receive application-to-person SMS and MMS on US local numbers. Omni handles the full 10DLC lifecycle over one JSON API: registering your brand and campaign, purchasing and assigning US numbers, sending text or media, and delivering signed status webhooks.
+
+## Guides
+
+<CardGroup cols={2}>
+  <Card title="Send an SMS" icon="send" href="/quickstart/send-sms" arrow="true">
+    Verify 10DLC readiness, send your first SMS, track delivery, and register numbers for 10DLC.
+  </Card>
+  <Card title="Receive an SMS" icon="inbox" href="/quickstart/receive-sms" arrow="true">
+    Subscribe to signed `message.received` webhooks and download inbound MMS attachments.
+  </Card>
+  <Card title="Upload and send media" icon="image" href="/quickstart/media" arrow="true">
+    Upload images, video, audio, or PDFs and attach up to 10 files to an outbound MMS.
+  </Card>
+  <Card title="Webhooks" icon="webhook" href="/webhooks" arrow="true">
+    Verify HMAC-SHA256 signatures and handle delivery, failure, and 10DLC status events.
+  </Card>
+</CardGroup>
+
+## How A2P SMS works on Omni
+
+<Steps>
+  <Step title="Register your 10DLC brand and campaign">
+    Submit your business details via `POST /brands`, wait for `verified`, then submit your use case via `POST /campaigns` and wait for `approved`.
+  </Step>
+  <Step title="Buy and assign a US number">
+    Search with `GET /numbers/available`, purchase with `POST /numbers`, and assign the number via `PUT /numbers/{phone_number}/campaign`. Wait until `GET /numbers/{phone_number}/campaign` reports `sms.enabled: true`.
+  </Step>
+  <Step title="Send SMS and MMS">
+    Call `POST /messages` with an `Idempotency-Key`. Name `from` directly, or pass `campaign_id` to let the campaign pick a sender (and optionally schedule with `send_at`). Attach files via `media_ids` or `media_urls`.
+  </Step>
+  <Step title="Track delivery and inbound replies">
+    Register an endpoint at `POST /admin/webhooks` for `message.sent`, `message.delivered`, `message.failed`, and `message.received`, plus `brand.updated`, `campaign.updated`, and `number.updated`.
+  </Step>
+</Steps>
+
+## At a glance
+
+| Capability | Details |
+| --- | --- |
+| **10DLC requirement** | Local numbers send and receive SMS/MMS only while assigned to an approved campaign with carrier confirmation (`sms.enabled: true`). |
+| **Message length** | `body` up to 1,600 characters. |
+| **MMS attachments** | Up to **10** uploaded files (`media_ids`, max 4 MiB each) or up to **10** public `https` URLs (`media_urls`). |
+| **Scheduling** | Pass `send_at` (15 minutes to 35 days ahead) together with `campaign_id`. |
+| **Cost protection** | Pass `max_price_micro_usd` to refuse a send above your ceiling, or preview multi-part rates via `GET /prices?parts=N`. |
+| **Pricing catalog** | `GET /prices` lists `brand.registration`, `campaign.registration`, `campaign.monthly`, `number.purchase`, `number.monthly`, `message.sms.*`, and `message.mms.*`. |
