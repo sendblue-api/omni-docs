@@ -208,17 +208,24 @@ A `message.read` event carries the same Message with `read_at` set and `status` 
 | Scheduled sends | Not available: `send_at` needs a campaign |
 | Group messages | Not available, in either direction |
 
-Each line also has sending limits that Sendblue sets for it. A send over a limit is refused with `429 rate_limited`, and the error's `message` names which one:
+### Sending limits
 
-| Message | Limit |
-| --- | --- |
-| Sender per-second limit reached | Sends per second from the line |
-| Sender daily iMessage conversation limit reached | Distinct iMessage conversations per day |
-| Sender iMessage response rate below its floor | Share of recent recipients who replied |
-| Sender hourly new-recipient limit reached | New recipients per hour |
-| Sender daily new-recipient limit reached | New recipients per day |
+Each line has its own sending limits, checked when a send is accepted. A send over one is refused with `429 rate_limited`. `error.message` names the limit, `error.details.reason` gives its code, and the `Retry-After` header says when it can free.
 
-None of these limits applies to a recipient who messaged the line in the last 24 hours. The values are per line and are not published through the API.
+| `details.reason` | Limit | Usual value | `Retry-After` |
+| --- | --- | --- | --- |
+| `line_burst` | Sends from the line in one second | 10 | 1 second |
+| `line_daily_conversations` | Distinct recipients in the line's day, which begins at 03:00 in New York. Once reached, repeat recipients are refused too | 200 | Until the next 03:00 in New York |
+| `line_response_rate` | After the line has written to 100 distinct recipients in 24 hours, at least 10% must have replied | 100, 10% | None. It lifts as recipients reply |
+| `line_hourly_new_recipients` | New recipients in any 60 minutes | 15 | At most one hour |
+| `line_daily_new_recipients` | New recipients in the line's day | 50 | Until the next 03:00 in New York |
+
+- A **new recipient** is a number the line has neither written to nor heard from in the last 30 days.
+- **Replies are never limited.** A recipient who wrote to the line in the last 24 hours is exempt from all five.
+- The values are set per line by Sendblue. The table shows the usual ones; the API does not report a line's own values.
+- These limits protect the line. Apple restricts lines that write to many people who do not answer.
+
+To test without tripping them: write to a few numbers repeatedly rather than to many new ones, or have each test phone message the line first.
 
 ## Errors
 
@@ -228,7 +235,7 @@ Request errors follow [Errors](/errors). These are specific to iMessage lines:
 | --- | --- | --- |
 | `422 unprocessable`, reason `sender_unavailable` | The line is not ready to send, or the request carries media | Check the line with `GET /numbers/{phone_number}`. Remove media. |
 | `402 insufficient_funds` | The balance cannot cover the hold | Add funds |
-| `429 rate_limited` with one of the limit messages above | A line limit | Wait, or spread sends across lines |
+| `429 rate_limited` with a `details.reason` starting `line_` | One of the line's [sending limits](#sending-limits) | Wait for `Retry-After`, or spread sends across lines |
 
 A message can also fail after it is accepted. Read `error_code` and `failure` on the Message or in the `message.failed` event:
 
