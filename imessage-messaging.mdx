@@ -100,7 +100,7 @@ What arrives as a Message:
 
 - One-to-one messages from US numbers, sent to your line as iMessage or SMS.
 - Text up to 1,600 characters.
-- Attachments, listed in order in `media_urls`. Each URL is an Omni Media resource and needs your account's credentials to download.
+- Attachments, listed in order in `media_urls`. See [Attachments you receive](#attachments-you-receive).
 
 A received message has a `channel`, `imessage` or `sms`: the service the line's device reported the message arrived by. It is in the Message you read and in the `message.received` event.
 
@@ -116,6 +116,34 @@ What does not arrive. These are dropped: no Message or event is created, and the
 - Other items that are not ordinary messages.
 - Messages that were on the line before it was assigned to your account.
 - A message with no text whose attachment could not be read from the line's device within an hour, or whose attachment could not be placed in the message.
+
+## Attachments you receive
+
+A message received on an iMessage line can carry up to 10 attachments.
+
+| | |
+| --- | --- |
+| **Kept types** | JPEG, PNG, GIF, HEIC and HEIF photos, MP4 video, MP3 audio, PDF, voice notes (CAF) and contact cards (vCard) |
+| **Size** | 4 MB per file, and 16 MB for the kept files of one message |
+| **Where** | `media_urls`, in the order they appear in the message |
+
+**Downloading.** Each URL in `media_urls` is `GET /messages/{message_id}/media/{media_id}` on the API host. Call it with your bearer credentials, as you would any other route. It answers with a redirect to a download link that needs no further credentials and is valid for four hours. Treat that link as a secret. A client that follows redirects gets the file in one call; a plain `GET` of the URL without the `Authorization` header answers `401`.
+
+**A file that could not be kept does not lose the message.** The text and the other attachments arrive as usual, and the Message (and its `message.received` event) lists each file that was not kept under `unavailable_media`:
+
+```json
+"unavailable_media": [
+  { "reason": "too_large", "content_type": "video/quicktime", "size": 20971520 }
+]
+```
+
+| `reason` | Meaning |
+| --- | --- |
+| `too_large` | The file is over 4 MB, or the message's kept files would pass 16 MB together |
+| `unsupported_type` | The file is not one of the kept types |
+| `too_many` | The message already has 10 kept attachments |
+
+`unavailable_media` is absent when every attachment was kept. A file listed there cannot be fetched later.
 
 ## Erase a message
 
@@ -204,7 +232,7 @@ A `message.read` event carries the same Message with `read_at` set and `status` 
 | --- | --- |
 | Recipients | US numbers only, one recipient per message |
 | Text | 1,600 characters |
-| Outbound attachments | Not available on these lines. A send with `media_ids` or media URLs is refused with `422 unprocessable`, reason `sender_unavailable`. |
+| Outbound attachments | Not available on these lines today. A send with `media_ids` or `media_urls` is refused with `422 unprocessable`, `details.field` `media_urls`, reason `media_unsupported`. Send the text without media. |
 | Scheduled sends | Not available: `send_at` needs a campaign |
 | Group messages | Not available, in either direction |
 
@@ -233,7 +261,8 @@ Request errors follow [Errors](/errors). These are specific to iMessage lines:
 
 | Response | Cause | What to do |
 | --- | --- | --- |
-| `422 unprocessable`, reason `sender_unavailable` | The line is not ready to send, or the request carries media | Check the line with `GET /numbers/{phone_number}`. Remove media. |
+| `422 unprocessable`, reason `sender_unavailable` | The line is not ready to send | Check the line with `GET /numbers/{phone_number}`. |
+| `422 unprocessable`, reason `media_unsupported` | The request carries media, which these lines do not send today | Send the text without media. |
 | `402 insufficient_funds` | The balance cannot cover the hold | Add funds |
 | `429 rate_limited` with a `details.reason` starting `line_` | One of the line's [sending limits](#sending-limits) | Wait for `Retry-After`, or spread sends across lines |
 
@@ -264,7 +293,7 @@ Other failures carry an `error_code` without a `failure` object. They are not ch
 | Inbound text reply | A real device and handset in production |
 | SMS fallback, `channel`, and charging by final service | Automated tests against a simulated device. Not yet observed on a physical device. |
 | The 15-minute settling time | A chosen default. The time a device takes to resend an iMessage as SMS has not been measured. |
-| Inbound attachments, including several in one message | Automated tests against a simulated device |
+| Inbound attachments, including several in one message, voice notes, contact cards and `unavailable_media` | Automated tests against a simulated device |
 | `sent_at`, `channel` on received messages, and the empty body of a photo-only message | Automated tests against a simulated device |
 | Read receipts (`read_at`, `message.read`) | Automated tests against a simulated device |
 | Dropping of group messages, tapbacks, shared locations and other unsupported inbound items | Automated tests against a simulated device |
