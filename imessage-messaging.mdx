@@ -23,7 +23,7 @@ curl https://omni-api.sendblue.com/messages \
 ```
 
 - `from` is one of your iMessage lines. `to` is a US number in E.164.
-- `body` is text, up to 1,600 characters.
+- `body` is text: up to 18,996 characters on a line that sends iMessage only, and up to 1,600 on a line with SMS fallback. See [iMessage and SMS fallback](#imessage-and-sms-fallback).
 - The price is held from your balance when the message is accepted. See [Billing](#billing).
 - Send an `Idempotency-Key` with every request. See [Idempotency](/idempotency).
 
@@ -231,7 +231,7 @@ A `message.read` event carries the same Message with `read_at` set and `status` 
 | Limit | Value |
 | --- | --- |
 | Recipients | US numbers only, one recipient per message |
-| Text | 1,600 characters |
+| Text you send | 18,996 characters on an iMessage-only line; 1,600 on a line with SMS fallback |
 | Outbound attachments | Not available on these lines today. A send with `media_ids` or `media_urls` is refused with `422 unprocessable`, `details.field` `media_urls`, reason `media_unsupported`. Send the text without media. |
 | Scheduled sends | Not available: `send_at` needs a campaign |
 | Group messages | Not available, in either direction |
