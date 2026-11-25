@@ -54,7 +54,7 @@ guides for [authentication](/authentication), [idempotency](/idempotency),
 
 
 # The contract explains unavailable members in its own vocabulary; say it plainly.
-MARKER = re.compile(r"are marked `x-status: planned`\s+in `\w+`")
+MARKER = re.compile(r"\b(is|are) marked `x-status: planned`\s+in `\w+`")
 # GitHub Push Protection flags AC/SK + 32 hex chars as Twilio credentials in public repos.
 PLACEHOLDER_SID = re.compile(r"\b(AC|SK)[0-9a-fA-F]{32}\b")
 
@@ -89,7 +89,7 @@ def reword(node):
     if isinstance(node, dict):
         for k, v in node.items():
             if k == "description" and isinstance(v, str):
-                node[k] = MARKER.sub("are not available yet", v)
+                node[k] = MARKER.sub(r"\1 not available yet", v)
             else:
                 reword(v)
     elif isinstance(node, list):
