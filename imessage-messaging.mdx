@@ -46,6 +46,12 @@ Two more fields describe an iMessage-line message:
 
 A message that is never reported delivered stays `sent`. Delivery reports depend on the recipient's device and are not guaranteed.
 
+### When was it sent?
+
+`sent_at` is set when the line's device first reports that the message was sent or delivered. The device reports that it sent the message, not when, so `sent_at` is the time Sendblue received that report. It can be a few seconds later than the actual send. It is `null` until then, and it does not change afterwards.
+
+To list a conversation in send order, sort by `sent_at` and fall back to `created_at` for messages that are still `queued` or `sending`.
+
 ### Read receipts
 
 When the recipient shares read receipts, the message gets a `read_at` timestamp and a `message.read` event is sent once.
@@ -70,12 +76,12 @@ A line runs in one of two modes. Sendblue sets the mode per line; you cannot cha
 
 ## Billing
 
-Two prices apply. Check them with `GET /prices`.
+Two prices apply. Both are in `GET /prices` under the `product` names below, when your account has them.
 
 | Price | Charged for |
 | --- | --- |
-| `imessage.device.outbound.message` | One message sent as iMessage |
-| `sms.device.outbound.segment` | Each segment of a message sent as SMS by the line's device |
+| `message.imessage.outbound` | One message sent as iMessage |
+| `message.imessage.sms_fallback.outbound` | Each segment of a message sent as SMS by the line's device |
 
 A message is charged once, for the service it was finally sent by.
 
@@ -96,6 +102,10 @@ What arrives as a Message:
 - Text up to 1,600 characters.
 - Attachments, listed in order in `media_urls`. Each URL is an Omni Media resource and needs your account's credentials to download.
 
+A received message has a `channel`, `imessage` or `sms`: the service the line's device reported the message arrived by. It is in the Message you read and in the `message.received` event.
+
+A photo or file with no caption has an empty `body`. The text is exactly what the sender typed.
+
 What does not arrive. These are dropped: no Message or event is created, and they cannot be recovered later.
 
 - Group messages and group changes.
@@ -106,6 +116,15 @@ What does not arrive. These are dropped: no Message or event is created, and the
 - Other items that are not ordinary messages.
 - Messages that were on the line before it was assigned to your account.
 - A message with no text whose attachment could not be read from the line's device within an hour, or whose attachment could not be placed in the message.
+
+## Erase a message
+
+Both work on any message of your account, sent or received, once it is no longer in flight. Neither can be undone.
+
+- `PATCH /messages/{message_id}` with `{"body": ""}` erases the text. A received message's attachments stay.
+- `DELETE /messages/{message_id}` removes the whole record, including a received message's attachments. If the line's device reports the same message again, it is not restored.
+
+Erasing or deleting a message also removes its stored webhook event snapshots from future delivery and replay.
 
 ## Webhooks
 
@@ -239,6 +258,7 @@ Other failures carry an `error_code` without a `failure` object. They are not ch
 | SMS fallback, `channel`, and charging by final service | Automated tests against a simulated device. Not yet observed on a physical device. |
 | The 15-minute settling time | A chosen default. The time a device takes to resend an iMessage as SMS has not been measured. |
 | Inbound attachments, including several in one message | Automated tests against a simulated device |
+| `sent_at`, `channel` on received messages, and the empty body of a photo-only message | Automated tests against a simulated device |
 | Read receipts (`read_at`, `message.read`) | Automated tests against a simulated device |
 | Dropping of group messages, tapbacks, shared locations and other unsupported inbound items | Automated tests against a simulated device |
 | Webhook events for iMessage-line messages | Automated tests. Not yet checked against a real line. |
