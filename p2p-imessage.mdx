@@ -1,7 +1,7 @@
 ---
 title: P2P iMessage
 sidebarTitle: Overview
-description: Request Sendblue-managed US iMessage lines, send messages and attachments, and receive signed webhooks.
+description: Request Sendblue-managed US iMessage lines, send messages, receive messages and attachments, and get signed webhooks.
 ---
 
 Send and receive messages over Sendblue-managed US iMessage lines through the same messaging and webhook surface you use for the rest of the Omni API. Instead of registering a 10DLC campaign, you submit a number order for iMessage lines; once Sendblue sets them up, they appear directly on your account ready to send from `POST /messages`.
@@ -44,6 +44,6 @@ Send and receive messages over Sendblue-managed US iMessage lines through the sa
 | **Provisioning** | Requested via `POST /numbers/orders` (`channel: "imessage"`, quantity `1`–`100`). Cancel pending orders with `DELETE /numbers/orders/{order_id}`. |
 | **Line management** | Managed by Sendblue — fulfilled iMessage lines cannot be configured, assigned to a 10DLC campaign, or released through the API. |
 | **Sending** | Pass an assigned iMessage number as `from` in `POST /messages` with an `Idempotency-Key`. |
-| **Attachments** | Inbound attachments arrive in `media_urls`. Outbound attachments are not available on these lines: a send with media is refused. See [Send and receive](/imessage-messaging#limits). |
+| **Attachments** | Received attachments (photos including HEIC, video, audio, PDF, voice notes, contact cards; 4 MB a file, 16 MB a message) arrive in `media_urls` and are downloaded with your bearer credentials. Sending attachments from an iMessage line is not available today: a send with media is refused. See [Attachments you receive](/imessage-messaging#attachments-you-receive). |
 | **Delivery evidence** | `Message` records `delivery_evidence` (`verified`, `reported`, `reported_unconfirmed`, or `unknown`), `billing_status` (`held`, `charged`, `uncharged`, or `review`), and `channel` (`imessage` or `sms`) on lines that can fall back to device SMS. |
 | **Permissions** | `number_orders:create`, `number_orders:read`, `number_orders:cancel`, `messages:send`, and `messages:read`. |

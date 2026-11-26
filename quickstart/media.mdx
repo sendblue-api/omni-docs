@@ -1,6 +1,6 @@
 ---
 title: Upload and send media
-description: Upload an attachment to Omni, then send it by ID in an MMS or iMessage.
+description: Upload an attachment to Omni, then send it by ID in an MMS.
 ---
 
 <Steps>
@@ -54,7 +54,7 @@ description: Upload an attachment to Omni, then send it by ID in an MMS or iMess
       }'
     ```
 
-    - Carrier MMS accepts up to **10** uploads per message, sent in delivery order. An iMessage line accepts **1**.
+    - Carrier MMS accepts up to **10** uploads per message, sent in delivery order. An iMessage line does not send attachments today: a send with media from one is refused with `422 unprocessable`, reason `media_unsupported`.
     - `body` is optional when attachments are present.
     - Keep the upload live until the message has been sent — deleting it or letting it expire revokes access immediately, even for queued messages.
     - Pass either `media_ids` or `media_urls`, never both (`media_urls` accepts up to 10 public `https` URLs you host yourself).

@@ -154,5 +154,5 @@ Respond with any `2xx` status as soon as you durably store the event. Design you
 - **Erasure:** redacting or deleting a message — or deleting one of its media attachments — removes its stored event snapshots from future delivery and replay.
 
 <Info title="Status callbacks are separate">
-  Per-message `status_callback` URLs and call/TwiML callback URLs are a separate mechanism. They send Twilio's form parameters signed with `X-Twilio-Signature`, not the signed JSON described here. Webhook endpoints receive their events independently.
+  Per-message `status_callback` URLs and call/TwiML callback URLs are a separate mechanism. They send Twilio-style form parameters (`application/x-www-form-urlencoded`, with `MessageSid`, `MessageStatus` and the rest) signed with `X-Twilio-Signature` using the account token, not the signed JSON described here. There is no JSON form of `status_callback`: if you want JSON, register a webhook endpoint and leave `status_callback` unset. Webhook endpoints receive their events independently, so a status change can notify both.
 </Info>
